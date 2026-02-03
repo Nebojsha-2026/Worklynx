@@ -1,1 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Register — Worklynx</title>
+  <link rel="stylesheet" href="assets/css/app.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a class="brand" href="index.html">
+        <span style="width:34px;height:34px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#22c55e);display:grid;place-items:center;font-weight:900;">W</span>
+        Worklynx
+      </a>
+      <a class="btn" href="login.html">Login</a>
+    </div>
 
+    <div class="shell" style="max-width:560px;margin: 20px auto;">
+      <h2 style="margin:0 0 12px;">Create Manager Account</h2>
+
+      <div id="msg" class="notice"></div>
+
+      <form class="form" id="form">
+        <div>
+          <label>Company name</label>
+          <input id="company" required placeholder="Your Company Pty Ltd"/>
+        </div>
+        <div>
+          <label>Plan</label>
+          <select id="plan">
+            <option value="starter">Starter (up to 10 employees) — $20/mo</option>
+            <option value="growth">Growth (up to 30 employees) — $45/mo</option>
+          </select>
+        </div>
+        <div>
+          <label>Email</label>
+          <input id="email" type="email" required placeholder="you@company.com"/>
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="password" type="password" required placeholder="Create a strong password"/>
+        </div>
+        <button class="btn primary" id="btn" type="submit">Create account</button>
+      </form>
+
+      <p style="color:var(--muted);font-size:13px;margin:12px 0 0;">
+        Employees cannot register. They must be invited by a manager.
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { registerManager } from "./js/auth.js";
+    import { showMessage, setLoading, $ } from "./js/ui.js";
+
+    $("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = $("msg");
+      const btn = $("btn");
+      showMessage(msg, "Creating account...", "info");
+      setLoading(btn, true, "Create account");
+
+      const companyName = $("company").value.trim();
+      const plan = $("plan").value;
+      const email = $("email").value.trim();
+      const password = $("password").value;
+
+      const res = await registerManager(email, password, companyName, plan);
+
+      if (!res.success) {
+        showMessage(msg, "❌ " + res.error, "error");
+        setLoading(btn, false, "Create account");
+        return;
+      }
+
+      showMessage(msg, "✅ Account created. Please check your email to confirm (if required), then login.", "success");
+      setLoading(btn, false, "Create account");
+    });
+  </script>
+</body>
+</html>
