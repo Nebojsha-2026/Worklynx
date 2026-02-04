@@ -1,4 +1,3 @@
-// js/core/guards.js
 import { path } from "./config.js";
 import { getSession } from "./session.js";
 import { isPlatformAdmin } from "../data/admin.api.js";
@@ -6,12 +5,12 @@ import { getMyMemberships } from "../data/members.api.js";
 import { pickHighestRole, dashboardPathForRole } from "./roles.js";
 
 export async function requireAuth() {
-  const user = await getUser();
-  if (!user) {
+  const session = await getSession();
+  if (!session?.user) {
     window.location.replace(path("/login.html"));
     return null;
   }
-  return user;
+  return session.user;
 }
 
 /**
