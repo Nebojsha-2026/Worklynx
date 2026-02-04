@@ -1,6 +1,6 @@
 // js/core/guards.js
 import { path } from "./config.js";
-import { getUser } from "./session.js";
+import { getSession } from "./session.js";
 import { isPlatformAdmin } from "../data/admin.api.js";
 import { getMyMemberships } from "../data/members.api.js";
 import { pickHighestRole, dashboardPathForRole } from "./roles.js";
