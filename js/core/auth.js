@@ -1,28 +1,51 @@
-import { supabase } from "./supabase.js";
+// js/core/auth.js
+import { getSupabase } from "./supabaseClient.js";
 
-export async function getSession() {
-  const { data } = await supabase.auth.getSession();
-  return data.session;
+export async function signUpWithEmail(email, password, fullName) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { full_name: fullName || "" },
+    },
+  });
+  if (error) throw error;
+
+  // Optional: create profile row (works if you later add insert policy or do it server-side)
+  // For now, we’ll rely on auth metadata and you can add a trigger later.
+
+  return data;
 }
 
-export async function login(email, password) {
-  return supabase.auth.signInWithPassword({ email, password });
+export async function signInWithEmail(email, password) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
 }
 
-export async function logout() {
-  await supabase.auth.signOut();
-  window.location.href = "/login.html";
+export async function signOut() {
+  const supabase = getSupabase();
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
-export async function getProfile() {
-  const session = await getSession();
-  if (!session) return null;
+export async function sendPasswordReset(email) {
+  const supabase = getSupabase();
+  const redirectTo = `${window.location.origin}/reset-password.html`;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .single();
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+  if (error) throw error;
+  return data;
+}
 
+export async function updatePassword(newPassword) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
   return data;
 }
