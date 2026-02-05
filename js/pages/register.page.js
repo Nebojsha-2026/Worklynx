@@ -1,6 +1,7 @@
 // js/pages/register.page.js
 import { redirectIfLoggedIn } from "../core/guards.js";
 import { signUpWithEmail } from "../core/auth.js";
+import { path } from "../core/config.js";
 
 await redirectIfLoggedIn();
 
@@ -18,7 +19,7 @@ form.addEventListener("submit", async (e) => {
   try {
     await signUpWithEmail(email, password, fullName);
     alert("Registered! Check your email if confirmation is enabled, then log in.");
-    window.location.assign("/login.html");
+    window.location.assign(path("/login.html"));
   } catch (err) {
     alert(err.message || "Register failed");
   }
