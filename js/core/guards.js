@@ -4,6 +4,15 @@ import { isPlatformAdmin } from "../data/admin.api.js";
 import { getMyMemberships } from "../data/members.api.js";
 import { pickHighestRole, dashboardPathForRole } from "./roles.js";
 
+export async function requireAuth() {
+  const session = await getSession();
+  if (!session?.user) {
+    window.location.replace(path("/login.html"));
+    return null;
+  }
+  return session.user;
+}
+
 export async function enforceRoleRouting() {
   const user = await requireAuth();
   if (!user) return;
