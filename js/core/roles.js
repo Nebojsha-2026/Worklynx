@@ -1,4 +1,6 @@
 // js/core/roles.js
+import { path } from "./config.js";
+
 export const ROLE_PRIORITY = ["BO", "BM", "MANAGER", "EMPLOYEE"];
 
 export function pickHighestRole(roles) {
