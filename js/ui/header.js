@@ -56,7 +56,7 @@ export function renderHeader({ appName = "WorkLynx", companyName = "", companyLo
   el.querySelector("#wlLogoutBtn").addEventListener("click", async () => {
     try {
       await signOut();
-      window.location.replace("/login.html");
+      window.location.replace("../../login.html");
     } catch (e) {
       alert(e.message || "Logout failed");
     }
