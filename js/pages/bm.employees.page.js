@@ -5,6 +5,8 @@ import { loadOrgContext } from "../core/orgContext.js";
 import { requireRole } from "../core/guards.js";
 import { path } from "../core/config.js";
 import { createInvite } from "../data/invites.api.js";
+import { renderSidebar } from "../ui/sidebar.js";
+
 
 await requireRole(["BO", "BM"]); // For now: only BO/BM can invite employees (we’ll add MANAGER later)
 
