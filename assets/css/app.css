@@ -1,3 +1,7 @@
+@import "./layout.css";
+@import "./components.css";
+@import "./themes.css";
+
 /* css/app.css */
 :root {
   --bg: #0b1220;
