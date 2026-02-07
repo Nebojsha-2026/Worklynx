@@ -8,7 +8,7 @@ export function renderHeader({ appName = "WorkLynx", companyName = "", companyLo
 
   el.innerHTML = `
     <div class="wl-header__left">
-      <a class="wl-brand" href="index.html">
+      <a class="wl-brand" href="Worklynx/index.html">
         <img src="${path("/assets/images/logo-mark.png")}" alt="${appName}" class="wl-brand__logo" />
         <span class="wl-brand__name">${appName}</span>
       </a>
