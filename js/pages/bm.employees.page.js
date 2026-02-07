@@ -22,7 +22,18 @@ document.body.prepend(
 document.body.append(renderFooter({ version: "v0.1.0" }));
 
 const main = document.querySelector("main");
+main.classList.add("wl-page");
+
 main.innerHTML = `
+  <div class="wl-shell">
+    <div id="wlSidebar"></div>
+    <div id="wlContent"></div>
+  </div>
+`;
+
+main.querySelector("#wlSidebar").append(renderSidebar("BM"));
+
+main.querySelector("#wlContent").innerHTML = `
   <h1>Employees</h1>
   <p>Invite employees to join <strong>${org.name}</strong>.</p>
 
@@ -37,11 +48,6 @@ main.innerHTML = `
     </form>
 
     <div id="inviteEmployeeResult" style="margin-top:12px;"></div>
-  </section>
-
-  <section style="margin-top:16px;">
-    <h2>Employee list (next step)</h2>
-    <p>We’ll show employees in this org here after invites are working.</p>
   </section>
 `;
 
