@@ -188,3 +188,15 @@ main.wl-page, main.wl-auth{
     display: block;
   }
 }
+/* Sidebar links must always stack vertically (override any global <a> rules) */
+.wl-sidebar .wl-snav__item{
+  display: block !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Sidebar links must always stack vertically (override any global <a> rules) */
+.wl-sidebar .wl-snav__item{
+  display: block !important;
+  width: 100%;
+  box-sizing: border-box;
+}
