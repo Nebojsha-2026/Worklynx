@@ -2,6 +2,12 @@
 import { redirectIfLoggedIn } from "../core/guards.js";
 import { signInWithEmail } from "../core/auth.js";
 
+function getResumeInvite() {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#resumeInvite=")) return null;
+  return decodeURIComponent(hash.replace("#resumeInvite=", ""));
+}
+
 await redirectIfLoggedIn();
 
 const form = document.querySelector("#loginForm");
