@@ -1,3 +1,4 @@
+// js/core/guards.js
 import { path } from "./config.js";
 import { getSession } from "./session.js";
 import { isPlatformAdmin } from "../data/admin.api.js";
@@ -47,6 +48,23 @@ export async function enforceRoleRouting() {
     return;
   }
 
+  const memberships = await getMyMemberships();
+  const roles = memberships.map((m) => m.role);
+  const highest = pickHighestRole(roles);
+
+  if (!highest) {
+    window.location.replace(path("/pricing.html"));
+    return;
+  }
+
+  const target = dashboardPathForRole(highest);
+  if (window.location.pathname !== target) window.location.replace(target);
+}
+
+/**
+ * Require authentication and require that the user's highest role is in allowedRoles.
+ * Does NOT force dashboard redirect if the role is allowed.
+ */
 export async function requireRole(allowedRoles = []) {
   const user = await requireAuth();
   if (!user) return null;
@@ -64,23 +82,9 @@ export async function requireRole(allowedRoles = []) {
   }
 
   if (!allowedRoles.includes(highest)) {
-    // If they try to access a page not allowed for their role, send them to their dashboard
     window.location.replace(dashboardPathForRole(highest));
     return null;
   }
 
   return { user, role: highest };
-}
-  
-  const memberships = await getMyMemberships();
-  const roles = memberships.map((m) => m.role);
-  const highest = pickHighestRole(roles);
-
-  if (!highest) {
-    window.location.replace(path("/pricing.html"));
-    return;
-  }
-
-  const target = dashboardPathForRole(highest);
-  if (window.location.pathname !== target) window.location.replace(target);
 }
