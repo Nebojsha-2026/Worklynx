@@ -1,16 +1,14 @@
 // js/pages/bo.dashboard.page.js
-import { enforceRoleRouting } from "../core/guards.js";
+import { requireRole } from "../core/guards.js";
 import { renderHeader } from "../ui/header.js";
 import { renderFooter } from "../ui/footer.js";
+import { renderSidebar } from "../ui/sidebar.js";
 import { loadOrgContext } from "../core/orgContext.js";
-import { path } from "../core/config.js";
 
-await enforceRoleRouting();
+await requireRole(["BO"]);
 
-// Load org data
 const org = await loadOrgContext();
 
-// Render header/footer with REAL company name
 document.body.prepend(
   renderHeader({
     companyName: org.name,
@@ -20,16 +18,32 @@ document.body.prepend(
 
 document.body.append(renderFooter({ version: "v0.1.0" }));
 
-// Page content
 const main = document.querySelector("main");
+main.classList.add("wl-page");
+
 main.innerHTML = `
+  <div class="wl-shell">
+    <div id="wlSidebar"></div>
+    <div id="wlContent"></div>
+  </div>
+`;
+
+main.querySelector("#wlSidebar").append(renderSidebar("BO"));
+
+main.querySelector("#wlContent").innerHTML = `
   <h1>Business Owner Dashboard</h1>
-  <p>Welcome to <strong>${org.name}</strong></p>
-  <p><a href="${path("/app/bo/managers.html")}">Go to Managers (Invites)</a></p>
+  <p>Welcome to <strong>${org.name}</strong>.</p>
 
   <div class="wl-cards">
-    <div class="wl-card">Labour Cost (YTD)</div>
-    <div class="wl-card">Hours Worked (YTD)</div>
-    <div class="wl-card">Pending Approvals</div>
+    <div class="wl-card" style="padding:14px;">Labour cost (YTD)</div>
+    <div class="wl-card" style="padding:14px;">Revenue (YTD)</div>
+    <div class="wl-card" style="padding:14px;">Profit (YTD)</div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <div class="wl-card" style="padding:16px;">
+      <h2 style="margin-top:0;">Next</h2>
+      <p style="margin-bottom:0;">We’ll connect these cards to real reporting once shifts, rates, and timesheets are implemented.</p>
+    </div>
   </div>
 `;
