@@ -46,7 +46,8 @@ if (resumeToken) {
 }
 
 alert("Registered! You can now log in.");
-window.location.href = "login.html";
+const hash = window.location.hash || "";
+window.location.replace(`login.html${hash}`);
 
   } catch (err) {
     console.error(err);
