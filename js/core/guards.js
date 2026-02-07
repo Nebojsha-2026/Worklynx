@@ -47,6 +47,31 @@ export async function enforceRoleRouting() {
     return;
   }
 
+export async function requireRole(allowedRoles = []) {
+  const user = await requireAuth();
+  if (!user) return null;
+
+  const admin = await isPlatformAdmin(user.id);
+  if (admin) return { user, role: "ADMIN" };
+
+  const memberships = await getMyMemberships();
+  const roles = memberships.map((m) => m.role);
+  const highest = pickHighestRole(roles);
+
+  if (!highest) {
+    window.location.replace(path("/pricing.html"));
+    return null;
+  }
+
+  if (!allowedRoles.includes(highest)) {
+    // If they try to access a page not allowed for their role, send them to their dashboard
+    window.location.replace(dashboardPathForRole(highest));
+    return null;
+  }
+
+  return { user, role: highest };
+}
+  
   const memberships = await getMyMemberships();
   const roles = memberships.map((m) => m.role);
   const highest = pickHighestRole(roles);
