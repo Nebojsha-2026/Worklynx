@@ -37,7 +37,9 @@ export function renderSidebar(role, activePath = window.location.pathname) {
   aside.className = "wl-sidebar wl-card";
 
   const items = NAV[role] || [];
+
   aside.innerHTML = `
+    <div style="font-weight:800; margin-bottom:10px; opacity:.9;">Menu</div>
     <nav class="wl-snav">
       ${items
         .map(([label, href]) => {
@@ -51,4 +53,3 @@ export function renderSidebar(role, activePath = window.location.pathname) {
 
   return aside;
 }
-
