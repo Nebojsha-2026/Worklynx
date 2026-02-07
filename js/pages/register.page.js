@@ -37,8 +37,17 @@ form.addEventListener("submit", async (e) => {
 
     if (error) throw error;
 
-    alert("Registered! You can now log in.");
-    window.location.href = "login.html";
+   const resumeToken = getResumeInvite();
+if (resumeToken) {
+  window.location.replace(
+    `login.html#resumeInvite=${encodeURIComponent(resumeToken)}`
+  );
+  return;
+}
+
+alert("Registered! You can now log in.");
+window.location.href = "login.html";
+
   } catch (err) {
     console.error(err);
     alert(err.message || "Registration failed");
