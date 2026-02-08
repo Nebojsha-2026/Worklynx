@@ -44,7 +44,7 @@ main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 main.querySelector("#wlContent").innerHTML = `
   <h1>Create shift</h1>
 
-  <section class="wl-card wl-formcard">
+    <section class="wl-card wl-panel">
     <form id="shiftForm" class="wl-form">
 
       <label>Title</label>
@@ -59,7 +59,7 @@ main.querySelector("#wlContent").innerHTML = `
       <label>Hourly rate</label>
       <input id="rate" type="number" step="0.01" min="0" required placeholder="e.g. 35.00" />
 
-      <div class="wl-grid2">
+      <div class="wl-form__row">
         <div>
           <label>Start</label>
           <input id="startAt" type="datetime-local" required />
