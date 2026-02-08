@@ -10,71 +10,80 @@
   border-radius: 12px;
   border: 1px solid var(--wl-border);
   background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.92);
+  color: var(--text);
+  font-weight: 800;
   cursor: pointer;
-  font-weight: 750;
-  letter-spacing: .2px;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease;
 }
 .wl-btn:hover{
-  background: rgba(255,255,255,0.09);
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.18);
 }
 .wl-btn:disabled{
-  opacity:.6;
-  cursor:not-allowed;
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
 }
 
-/* Forms */
+/* Form layout */
 .wl-form{
   display:grid;
-  gap: 10px;
+  gap: 12px;
 }
 
+/* Two-column rows for desktop (Start / End etc.) */
+.wl-form__row{
+  display:grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 900px){
+  .wl-form__row{ grid-template-columns: 1fr; }
+}
+
+/* Labels */
 .wl-form label{
   font-size: 13px;
-  opacity: .85;
-  margin-top: 6px;
+  color: var(--muted);
+  margin: 0 0 -6px;
 }
 
-/* Inputs / textarea / select */
+/* Inputs */
 .wl-form input,
-.wl-form textarea,
-.wl-form select{
+.wl-form select,
+.wl-form textarea{
   width: 100%;
   padding: 12px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(0,0,0,0.20);
-  color: rgba(255,255,255,0.92);
+  border: 1px solid var(--wl-border);
+  background: rgba(0,0,0,0.22);
+  color: var(--text);
   outline: none;
 }
-
 .wl-form textarea{
+  min-height: 96px;
   resize: vertical;
-  min-height: 90px;
 }
 
-/* Make date/time pickers not look “tiny” */
-.wl-form input[type="datetime-local"],
-.wl-form input[type="date"],
-.wl-form input[type="time"],
-.wl-form input[type="number"]{
-  min-height: 44px;
-}
-
-/* Nice focus */
 .wl-form input:focus,
-.wl-form textarea:focus,
-.wl-form select:focus{
-  border-color: rgba(255,255,255,0.28);
+.wl-form select:focus,
+.wl-form textarea:focus{
+  border-color: rgba(255,255,255,0.22);
   box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
 }
 
-/* Result / alerts (optional) */
-.wl-alert{
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  padding: 12px 12px;
-  border-radius: 12px;
+/* Card section spacing (so it doesn't feel like a giant slab) */
+.wl-card.wl-panel{
+  padding: 18px;
 }
-.wl-alert--error{ border-color: rgba(239,68,68,0.65); }
+
+/* Result / alerts */
+.wl-alert{
+  border: 1px solid var(--wl-border);
+  border-radius: 12px;
+  padding: 12px 12px;
+  background: rgba(255,255,255,0.06);
+}
+.wl-alert--error{ border-color: rgba(239,68,68,0.55); }
 .wl-alert--success{ border-color: rgba(34,197,94,0.55); }
