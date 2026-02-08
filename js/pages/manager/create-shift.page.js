@@ -62,29 +62,68 @@ main.querySelector("#wlContent").innerHTML = `
 document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  const resultEl = document.querySelector("#result");
+  const btn = e.target.querySelector('button[type="submit"]');
+
+  const title = document.querySelector("#title").value.trim();
+  const description = document.querySelector("#description").value.trim();
+  const location = document.querySelector("#location").value.trim();
+  const rateRaw = document.querySelector("#rate").value;
+  const startAt = document.querySelector("#startAt").value;
+  const endAt = document.querySelector("#endAt").value;
+
+  // Basic validation
+  const hourlyRate = Number(rateRaw);
+
+  if (!title) return (resultEl.innerHTML = `<div style="color:#ffb3b3;">Title is required.</div>`);
+  if (!startAt) return (resultEl.innerHTML = `<div style="color:#ffb3b3;">Start time is required.</div>`);
+  if (!endAt) return (resultEl.innerHTML = `<div style="color:#ffb3b3;">End time is required.</div>`);
+  if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) {
+    return (resultEl.innerHTML = `<div style="color:#ffb3b3;">Hourly rate must be greater than 0.</div>`);
+  }
+
+  const startMs = new Date(startAt).getTime();
+  const endMs = new Date(endAt).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return (resultEl.innerHTML = `<div style="color:#ffb3b3;">Invalid date/time.</div>`);
+  }
+  if (endMs <= startMs) {
+    return (resultEl.innerHTML = `<div style="color:#ffb3b3;">End time must be after start time.</div>`);
+  }
+
   const payload = {
     organization_id: org.id,
-    title: document.querySelector("#title").value.trim(),
-    description: document.querySelector("#description").value.trim(),
-    location: document.querySelector("#location").value.trim(),
-    hourly_rate: Number(document.querySelector("#rate").value),
-    start_at: document.querySelector("#startAt").value,
-    end_at: document.querySelector("#endAt").value,
+    title,
+    description,
+    location,
+    hourly_rate: hourlyRate,
+    start_at: startAt,
+    end_at: endAt,
   };
 
   try {
+    resultEl.innerHTML = `<div style="opacity:.85;">Creating shift…</div>`;
+    btn.disabled = true;
+
     const shift = await createShift(payload);
 
-    document.querySelector("#result").innerHTML = `
+    resultEl.innerHTML = `
       <div class="wl-card" style="padding:12px;">
         <strong>Shift created</strong><br/>
-        ${shift.title}
+        <div style="opacity:.9; margin-top:6px;">
+          <div><b>${shift.title}</b></div>
+          <div style="font-size:13px; opacity:.85;">
+            ${new Date(shift.start_at).toLocaleString()} → ${new Date(shift.end_at).toLocaleString()}
+          </div>
+        </div>
       </div>
     `;
 
     e.target.reset();
   } catch (err) {
     console.error(err);
-    alert(err.message || "Failed to create shift");
+    resultEl.innerHTML = `<div style="color:#ffb3b3;">${err.message || "Failed to create shift."}</div>`;
+  } finally {
+    btn.disabled = false;
   }
 });
