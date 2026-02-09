@@ -60,22 +60,21 @@ async function loadUpcoming() {
     listEl.innerHTML = `
       <div style="display:grid; gap:10px;">
         ${shifts.map(s => `
-          <div class="wl-card wl-panel" style="padding:12px;">
-            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
-              <div>
-                <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
-                <div style="font-size:13px; opacity:.85; margin-top:4px;">
-                  ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
-                </div>
-                ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
-              </div>
-              <div style="font-size:13px; opacity:.85; text-align:right;">
-                ${s.hourly_rate != null ? `<div><b>${escapeHtml(String(s.hourly_rate))}</b> / hr</div>` : ""}
-                ${s.status ? `<div style="margin-top:4px;">${escapeHtml(String(s.status))}</div>` : ""}
-              </div>
-            </div>
-          </div>
-        `).join("")}
+  <a class="wl-card wl-panel"
+     href="${path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`)}"
+     style="display:block; padding:12px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+      <div>
+        <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+        <div style="font-size:13px; opacity:.85; margin-top:4px;">
+          ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
+        </div>
+        ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
+      </div>
+      <div style="font-size:13px; opacity:.8;">View →</div>
+    </div>
+  </a>
+`).join("")}
       </div>
     `;
   } catch (err) {
