@@ -14,7 +14,7 @@ const params = new URLSearchParams(window.location.search);
 const shiftId = params.get("id");
 
 if (!shiftId) {
-  window.location.replace(path("/app/manager/dashboard.html"));
+  window.location.replace(path("/app/manager/shifts.html"));
   throw new Error("Missing shift id");
 }
 
@@ -42,36 +42,6 @@ main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 const content = main.querySelector("#wlContent");
 content.innerHTML = `<div style="opacity:.85;">Loading shift…</div>`;
 
-const cancelBtn = document.querySelector("#cancelBtn");
-const msgEl = document.querySelector("#actionMsg");
-
-if (String(shift.status) === "CANCELLED") {
-  cancelBtn.disabled = true;
-  cancelBtn.textContent = "Cancelled";
-} else {
-  cancelBtn.addEventListener("click", async () => {
-    const ok = confirm("Cancel this shift? Employees will no longer be able to work it.");
-    if (!ok) return;
-
-    try {
-      cancelBtn.disabled = true;
-      msgEl.innerHTML = `<div style="opacity:.85;">Cancelling…</div>`;
-
-      const updated = await cancelShift({ shiftId });
-
-      msgEl.innerHTML = `<div class="wl-alert wl-alert--success">Shift cancelled.</div>`;
-
-      // Update the UI status display if you show it later
-      shift.status = updated.status;
-      cancelBtn.textContent = "Cancelled";
-    } catch (err) {
-      console.error(err);
-      cancelBtn.disabled = false;
-      msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to cancel shift.")}</div>`;
-    }
-  });
-}
-
 const { data: shift, error } = await supabase
   .from("shifts")
   .select("*")
@@ -93,14 +63,44 @@ content.innerHTML = `
       ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
       ${shift.hourly_rate != null ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>` : ""}
       ${shift.description ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>` : ""}
+      ${shift.status ? `<div><b>Status:</b> ${escapeHtml(String(shift.status))}</div>` : ""}
     </div>
   </section>
 
-    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+  <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
     <a class="wl-btn" href="${path("/app/manager/shifts.html")}">← Back</a>
     <button id="cancelBtn" class="wl-btn" type="button">Cancel shift</button>
   </div>
+
   <div id="actionMsg" style="margin-top:10px;"></div>
+`;
+
+const cancelBtn = document.querySelector("#cancelBtn");
+const msgEl = document.querySelector("#actionMsg");
+
+if (String(shift.status) === "CANCELLED") {
+  cancelBtn.disabled = true;
+  cancelBtn.textContent = "Cancelled";
+} else {
+  cancelBtn.addEventListener("click", async () => {
+    const ok = confirm("Cancel this shift? Employees will no longer be able to work it.");
+    if (!ok) return;
+
+    try {
+      cancelBtn.disabled = true;
+      msgEl.innerHTML = `<div style="opacity:.85;">Cancelling…</div>`;
+
+      const updated = await cancelShift({ shiftId });
+
+      msgEl.innerHTML = `<div class="wl-alert wl-alert--success">Shift cancelled.</div>`;
+      cancelBtn.textContent = "Cancelled";
+    } catch (err) {
+      console.error(err);
+      cancelBtn.disabled = false;
+      msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to cancel shift.")}</div>`;
+    }
+  });
+}
 
 function escapeHtml(str) {
   return String(str)
