@@ -1,4 +1,5 @@
 // js/pages/manager/shift.page.js
+import { cancelShift } from "../../data/shifts.api.js";
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
