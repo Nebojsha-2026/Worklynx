@@ -40,3 +40,17 @@ export async function listShifts({ organizationId, limit = 50 }) {
   return data || [];
 }
 
+export async function cancelShift({ shiftId }) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("shifts")
+    .update({ status: "CANCELLED" })
+    .eq("id", shiftId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
