@@ -55,7 +55,6 @@ try {
       </div>
     `;
   } else {
-    // Sort by date then start time (since start_at is TIME)
     shifts.sort((a, b) => {
       const ad = String(a.shift_date || "");
       const bd = String(b.shift_date || "");
@@ -75,32 +74,39 @@ try {
 }
 
 function renderShiftRow(s) {
-  const id = s.id;
-  const title = s.title || "Untitled shift";
-  const date = s.shift_date || "";
-  const start = s.start_at || "";
-  const end = s.end_at || "";
-  const loc = s.location || "";
-
-  const href = path(`/app/manager/shift.html?id=${encodeURIComponent(id)}`);
+  const href = path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`);
 
   return `
     <a class="wl-card wl-panel" href="${href}" style="display:block;">
       <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
         <div>
-          <div style="font-weight:800;">${escapeHtml(title)}</div>
+          <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
           <div style="opacity:.85; font-size:13px; margin-top:4px;">
-            ${escapeHtml(date)} • ${escapeHtml(start)} → ${escapeHtml(end)}
-            ${loc ? ` • ${escapeHtml(loc)}` : ""}
+            ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
+            ${s.location ? ` • ${escapeHtml(s.location)}` : ""}
           </div>
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-  ${renderStatusBadge(s.status)}
-  <div style="opacity:.8; font-size:13px;">View →</div>
-</div>
+          ${renderStatusBadge(s.status)}
+          <div style="opacity:.8; font-size:13px;">View →</div>
+        </div>
       </div>
     </a>
   `;
+}
+
+function renderStatusBadge(statusRaw) {
+  const status = String(statusRaw || "ACTIVE").toUpperCase();
+
+  const map = {
+    ACTIVE: { cls: "wl-badge--active", label: "Active" },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
+    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
+  };
+
+  const s = map[status] || { cls: "", label: status };
+  return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
 
 function escapeHtml(str) {
