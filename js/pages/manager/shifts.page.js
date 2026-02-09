@@ -94,7 +94,10 @@ function renderShiftRow(s) {
             ${loc ? ` • ${escapeHtml(loc)}` : ""}
           </div>
         </div>
-        <div style="opacity:.8; font-size:13px;">View →</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+  ${renderStatusBadge(s.status)}
+  <div style="opacity:.8; font-size:13px;">View →</div>
+</div>
       </div>
     </a>
   `;
