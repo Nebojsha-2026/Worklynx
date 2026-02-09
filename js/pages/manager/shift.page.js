@@ -66,7 +66,7 @@ content.innerHTML = `
   </section>
 
   <div style="margin-top:14px; display:flex; gap:10px;">
-    <a class="wl-btn" href="${path("/app/manager/dashboard.html")}">← Back</a>
+    <a class="wl-btn" href="${path("/app/manager/shifts.html")}">← Back</a>
     <!-- Edit / Cancel buttons come next -->
   </div>
 `;
