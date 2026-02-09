@@ -57,32 +57,53 @@ async function loadUpcoming() {
       return;
     }
 
+    // optional: sort by date + start
+    shifts.sort((a, b) => {
+      const ad = String(a.shift_date || "");
+      const bd = String(b.shift_date || "");
+      if (ad !== bd) return ad.localeCompare(bd);
+      return String(a.start_at || "").localeCompare(String(b.start_at || ""));
+    });
+
     listEl.innerHTML = `
       <div style="display:grid; gap:10px;">
-        ${shifts.map(s => `
-  <a class="wl-card wl-panel"
-     href="${path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`)}"
-     style="display:block; padding:12px;">
-    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
-      <div>
-        <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
-        <div style="font-size:13px; opacity:.85; margin-top:4px;">
-          ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
-        </div>
-        ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
-      </div>
-     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-  ${renderStatusBadge(s.status)}
-  <div style="font-size:13px; opacity:.8;">View →</div>
-</div>
-    </div>
-  </a>
-`).join("")}
+        ${shifts
+          .map(
+            (s) => `
+          <a class="wl-card wl-panel"
+             href="${path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`)}"
+             style="display:block; padding:12px;">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+              <div>
+                <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+                <div style="font-size:13px; opacity:.85; margin-top:4px;">
+                  ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
+                </div>
+                ${
+                  s.location
+                    ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(
+                        s.location
+                      )}</div>`
+                    : ""
+                }
+              </div>
+
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+                ${renderStatusBadge(s.status)}
+                <div style="font-size:13px; opacity:.8;">View →</div>
+              </div>
+            </div>
+          </a>
+        `
+          )
+          .join("")}
       </div>
     `;
   } catch (err) {
     console.error(err);
-    listEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts: ${escapeHtml(err.message || "Unknown error")}</div>`;
+    listEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts: ${escapeHtml(
+      err.message || "Unknown error"
+    )}</div>`;
   }
 }
 
@@ -106,10 +127,8 @@ function renderStatusBadge(statusRaw) {
   };
 
   const s = map[status] || { cls: "", label: status };
-
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
 
 document.querySelector("#refreshBtn").addEventListener("click", loadUpcoming);
-
 await loadUpcoming();
