@@ -49,28 +49,48 @@ content.innerHTML = `
 `;
 
 const listEl = document.querySelector("#shiftsList");
+const showCancelledEl = document.querySelector("#showCancelled");
 
-try {
+let allShifts = [];
+
+async function load() {
   listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
+  allShifts = await listShifts({ organizationId: org.id, limit: 50 });
+  render();
+}
 
-  const shifts = await listShifts({ organizationId: org.id, limit: 50 });
+function render() {
+  const showCancelled = showCancelledEl.checked;
 
-  if (!shifts.length) {
+  const filtered = allShifts.filter(s => {
+    const st = String(s.status || "ACTIVE").toUpperCase();
+    if (showCancelled) return true;
+    return st !== "CANCELLED";
+  });
+
+  if (!filtered.length) {
     listEl.innerHTML = `
       <div class="wl-alert" style="opacity:.95;">
-        No shifts yet. Click <b>Create shift</b> to add one.
+        No shifts to show.
       </div>
     `;
-  } else {
-    shifts.sort((a, b) => {
-      const ad = String(a.shift_date || "");
-      const bd = String(b.shift_date || "");
-      if (ad !== bd) return ad.localeCompare(bd);
-      return String(a.start_at || "").localeCompare(String(b.start_at || ""));
-    });
-
-    listEl.innerHTML = shifts.map(renderShiftRow).join("");
+    return;
   }
+
+  filtered.sort((a, b) => {
+    const ad = String(a.shift_date || "");
+    const bd = String(b.shift_date || "");
+    if (ad !== bd) return ad.localeCompare(bd);
+    return String(a.start_at || "").localeCompare(String(b.start_at || ""));
+  });
+
+  listEl.innerHTML = filtered.map(renderShiftRow).join("");
+}
+
+showCancelledEl.addEventListener("change", render);
+
+try {
+  await load();
 } catch (err) {
   console.error(err);
   listEl.innerHTML = `
