@@ -87,3 +87,38 @@
 }
 .wl-alert--error{ border-color: rgba(239,68,68,0.55); }
 .wl-alert--success{ border-color: rgba(34,197,94,0.55); }
+
+/* Shift status badge */
+.wl-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid var(--wl-border);
+  background: rgba(255,255,255,0.06);
+  opacity: .95;
+  white-space: nowrap;
+}
+
+.wl-badge--active{
+  border-color: rgba(34,197,94,0.55);
+  background: rgba(34,197,94,0.12);
+}
+
+.wl-badge--cancelled{
+  border-color: rgba(239,68,68,0.55);
+  background: rgba(239,68,68,0.12);
+}
+
+.wl-badge--draft{
+  border-color: rgba(234,179,8,0.55);
+  background: rgba(234,179,8,0.12);
+}
+
+.wl-badge--offered{
+  border-color: rgba(59,130,246,0.55);
+  background: rgba(59,130,246,0.12);
+}
