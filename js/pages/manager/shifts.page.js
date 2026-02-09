@@ -36,6 +36,13 @@ content.innerHTML = `
     <a class="wl-btn" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
   </div>
 
+  <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <label style="display:flex; gap:8px; align-items:center; font-size:13px; opacity:.9;">
+      <input id="showCancelled" type="checkbox" />
+      Show cancelled
+    </label>
+  </div>
+
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div id="shiftsList" style="display:grid; gap:10px;"></div>
   </section>
