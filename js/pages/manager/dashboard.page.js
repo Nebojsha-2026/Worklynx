@@ -71,7 +71,10 @@ async function loadUpcoming() {
         </div>
         ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
       </div>
-      <div style="font-size:13px; opacity:.8;">View →</div>
+     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+  ${renderStatusBadge(s.status)}
+  <div style="font-size:13px; opacity:.8;">View →</div>
+</div>
     </div>
   </a>
 `).join("")}
@@ -90,6 +93,21 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function renderStatusBadge(statusRaw) {
+  const status = String(statusRaw || "ACTIVE").toUpperCase();
+
+  const map = {
+    ACTIVE: { cls: "wl-badge--active", label: "Active" },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
+    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
+  };
+
+  const s = map[status] || { cls: "", label: status };
+
+  return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
 
 document.querySelector("#refreshBtn").addEventListener("click", loadUpcoming);
