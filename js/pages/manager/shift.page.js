@@ -58,13 +58,15 @@ if (error || !shift) {
   throw error;
 }
 
-// Load employees for dropdown
+// Load employees for dropdown (load all members then filter client-side)
 let employees = [];
 let employeesLoadError = null;
 
 try {
   const members = await listOrgMembers({ organizationId: org.id }); // no roles param
-  employees = (members || []).filter((m) => String(m.role).toUpperCase() === "EMPLOYEE");
+  employees = (members || []).filter(
+    (m) => String(m.role).toUpperCase() === "EMPLOYEE"
+  );
 } catch (e) {
   employeesLoadError = e;
   employees = [];
@@ -78,9 +80,21 @@ content.innerHTML = `
       <div><b>Status:</b> ${escapeHtml(String(shift.status || "ACTIVE"))}</div>
       <div><b>Date:</b> ${escapeHtml(shift.shift_date)}</div>
       <div><b>Time:</b> ${escapeHtml(shift.start_at)} → ${escapeHtml(shift.end_at)}</div>
-      ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
-      ${shift.hourly_rate != null ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>` : ""}
-      ${shift.description ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>` : ""}
+      ${
+        shift.location
+          ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>`
+          : ""
+      }
+      ${
+        shift.hourly_rate != null
+          ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>`
+          : ""
+      }
+      ${
+        shift.description
+          ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>`
+          : ""
+      }
     </div>
   </section>
 
@@ -88,7 +102,16 @@ content.innerHTML = `
     <h2 style="margin:0 0 10px;">Assign employee</h2>
 
     ${
-      employees.length
+      employeesLoadError
+        ? `
+      <div class="wl-alert wl-alert--error">
+        Could not load employees.<br/>
+        <span style="opacity:.9; font-size:13px;">
+          ${escapeHtml(employeesLoadError?.message || "Unknown error")}
+        </span>
+      </div>
+    `
+        : employees.length
         ? `
       <form id="assignForm" class="wl-form">
         <label>Select employee</label>
@@ -112,12 +135,12 @@ content.innerHTML = `
       <div id="assignMsg" style="margin-top:10px;"></div>
     `
         : `
-      <div class="wl-alert wl-alert--error">
-  Could not load employees.<br/>
-  <span style="opacity:.9; font-size:13px;">
-    ${escapeHtml(employeesLoadError?.message || "Unknown error")}
-  </span>
-</div>
+      <div class="wl-alert">
+        No employees found in this company yet.<br/>
+        <span style="opacity:.9; font-size:13px;">
+          Invite an employee first, then come back here to assign them.
+        </span>
+      </div>
     `
     }
   </section>
@@ -158,20 +181,27 @@ if (assignForm && employeeSelect && assignMsg && unassignBtn) {
       `;
     } catch (err) {
       console.error(err);
-      assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
-        err.message || "Failed to assign."
-      )}</div>`;
+      assignMsg.innerHTML = `
+        <div class="wl-alert wl-alert--error">
+          ${escapeHtml(err.message || "Failed to assign.")}
+        </div>
+      `;
     }
   });
 
   unassignBtn.addEventListener("click", async () => {
     const employeeUserId = employeeSelect.value;
+
     if (!employeeUserId) {
       assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">Choose an employee first.</div>`;
       return;
     }
 
-    const ok = confirm("Unassign this employee from the shift?");
+    const label =
+      employeeSelect.options[employeeSelect.selectedIndex]?.textContent ||
+      employeeUserId;
+
+    const ok = confirm(`Unassign "${label}" from this shift?`);
     if (!ok) return;
 
     try {
@@ -180,9 +210,11 @@ if (assignForm && employeeSelect && assignMsg && unassignBtn) {
       assignMsg.innerHTML = `<div class="wl-alert wl-alert--success">Unassigned ✅</div>`;
     } catch (err) {
       console.error(err);
-      assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
-        err.message || "Failed to unassign."
-      )}</div>`;
+      assignMsg.innerHTML = `
+        <div class="wl-alert wl-alert--error">
+          ${escapeHtml(err.message || "Failed to unassign.")}
+        </div>
+      `;
     }
   });
 }
@@ -196,7 +228,9 @@ if (String(shift.status).toUpperCase() === "CANCELLED") {
   cancelBtn.textContent = "Cancelled";
 } else {
   cancelBtn.addEventListener("click", async () => {
-    const ok = confirm("Cancel this shift? Employees will no longer be able to work it.");
+    const ok = confirm(
+      "Cancel this shift? Employees will no longer be able to work it."
+    );
     if (!ok) return;
 
     try {
@@ -211,9 +245,11 @@ if (String(shift.status).toUpperCase() === "CANCELLED") {
     } catch (err) {
       console.error(err);
       cancelBtn.disabled = false;
-      msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
-        err.message || "Failed to cancel shift."
-      )}</div>`;
+      msgEl.innerHTML = `
+        <div class="wl-alert wl-alert--error">
+          ${escapeHtml(err.message || "Failed to cancel shift.")}
+        </div>
+      `;
     }
   });
 }
