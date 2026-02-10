@@ -68,13 +68,19 @@ content.innerHTML = `
     </div>
   </section>
 
-  <section class="wl-card wl-panel" style="margin-top:12px;">
+    <section class="wl-card wl-panel" style="margin-top:12px;">
     <h2 style="margin:0 0 10px;">Assign employee (test)</h2>
+
     <form id="assignForm" class="wl-form">
       <label>Employee user id</label>
       <input id="employeeUserId" placeholder="Paste employee UUID here" required />
-      <button class="wl-btn" type="submit">Assign to this shift</button>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="wl-btn" type="submit">Assign to this shift</button>
+        <button id="unassignBtn" class="wl-btn" type="button">Unassign</button>
+      </div>
     </form>
+
     <div id="assignMsg" style="margin-top:10px;"></div>
   </section>
 
