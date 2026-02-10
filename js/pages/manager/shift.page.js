@@ -113,8 +113,11 @@ content.innerHTML = `
     `
         : `
       <div class="wl-alert wl-alert--error">
-        Could not load employees. (Make sure you have employee accounts in this company.)
-      </div>
+  Could not load employees.<br/>
+  <span style="opacity:.9; font-size:13px;">
+    ${escapeHtml(employeesLoadError?.message || "Unknown error")}
+  </span>
+</div>
     `
     }
   </section>
