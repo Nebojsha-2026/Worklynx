@@ -62,10 +62,16 @@ function render() {
   const showCancelled = showCancelledEl.checked;
 
   const filtered = allShifts.filter((s) => {
-    const st = String(s.status || "ACTIVE").toUpperCase();
-    if (showCancelled) return true;
-    return st !== "CANCELLED";
-  });
+  const st = String(s.status || "ACTIVE").toUpperCase();
+
+  // Employees should never see drafts
+  if (st === "DRAFT") return false;
+
+  // Cancelled hidden unless toggled on
+  if (!showCancelled && st === "CANCELLED") return false;
+
+  return true;
+});
 
   if (!filtered.length) {
     listEl.innerHTML = `
