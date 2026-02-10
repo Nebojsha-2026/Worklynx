@@ -10,3 +10,12 @@ export async function assignShiftToEmployee({ shiftId, employeeUserId }) {
   if (error) throw error;
   return data;
 }
+
+export async function unassignShiftFromEmployee({ shiftId, employeeUserId }) {
+  const supabase = getSupabase();
+  const { error } = await supabase.rpc("unassign_shift_from_employee", {
+    p_shift_id: shiftId,
+    p_employee_user_id: employeeUserId,
+  });
+  if (error) throw error;
+}
