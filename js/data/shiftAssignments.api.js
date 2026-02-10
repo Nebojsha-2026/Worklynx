@@ -11,7 +11,7 @@ export async function listMyShiftAssignments() {
 
   const { data, error } = await supabase
     .from("shift_assignments")
-    .select("shift_id, created_at")
+    .select("shift_id, assigned_at")
     .eq("employee_user_id", userId);
 
   if (error) throw error;
