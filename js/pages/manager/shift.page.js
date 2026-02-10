@@ -1,5 +1,4 @@
 // js/pages/manager/shift.page.js
-import { cancelShift } from "../../data/shifts.api.js";
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
@@ -7,6 +6,8 @@ import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
+import { cancelShift } from "../../data/shifts.api.js";
+import { assignShiftToEmployee } from "../../data/assignments.api.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
 
@@ -14,7 +15,7 @@ const params = new URLSearchParams(window.location.search);
 const shiftId = params.get("id");
 
 if (!shiftId) {
-  window.location.replace(path("/app/manager/shifts.html"));
+  window.location.replace(path("/app/manager/dashboard.html"));
   throw new Error("Missing shift id");
 }
 
@@ -58,14 +59,23 @@ content.innerHTML = `
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:grid; gap:10px;">
+      <div><b>Status:</b> ${escapeHtml(String(shift.status || "ACTIVE"))}</div>
       <div><b>Date:</b> ${escapeHtml(shift.shift_date)}</div>
       <div><b>Time:</b> ${escapeHtml(shift.start_at)} → ${escapeHtml(shift.end_at)}</div>
       ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
       ${shift.hourly_rate != null ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>` : ""}
       ${shift.description ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>` : ""}
-     <div><b>Status:</b> <span id="statusText">${escapeHtml(String(shift.status || "ACTIVE"))}</span></div>
-
     </div>
+  </section>
+
+  <section class="wl-card wl-panel" style="margin-top:12px;">
+    <h2 style="margin:0 0 10px;">Assign employee (test)</h2>
+    <form id="assignForm" class="wl-form">
+      <label>Employee user id</label>
+      <input id="employeeUserId" placeholder="Paste employee UUID here" required />
+      <button class="wl-btn" type="submit">Assign to this shift</button>
+    </form>
+    <div id="assignMsg" style="margin-top:10px;"></div>
   </section>
 
   <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
@@ -76,10 +86,49 @@ content.innerHTML = `
   <div id="actionMsg" style="margin-top:10px;"></div>
 `;
 
+/* Assign handler */
+const assignForm = document.querySelector("#assignForm");
+const employeeUserIdEl = document.querySelector("#employeeUserId");
+const assignMsg = document.querySelector("#assignMsg");
+
+assignForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const employeeUserId = employeeUserIdEl.value.trim();
+  if (!employeeUserId) return;
+
+  try {
+    assignMsg.innerHTML = `<div style="opacity:.85;">Assigning…</div>`;
+    const row = await assignShiftToEmployee({
+      shiftId,
+      employeeUserId,
+    });
+
+    assignMsg.innerHTML = `
+      <div class="wl-alert wl-alert--success">
+        Assigned ✅<br/>
+        <div style="font-size:13px; opacity:.9; margin-top:6px;">
+          employee_user_id: <code>${escapeHtml(row.employee_user_id)}</code><br/>
+          assigned_by_user_id: <code>${escapeHtml(row.assigned_by_user_id)}</code><br/>
+          status: <code>${escapeHtml(String(row.status))}</code>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.error(err);
+    assignMsg.innerHTML = `
+      <div class="wl-alert wl-alert--error">
+        ${escapeHtml(err.message || "Failed to assign.")}
+      </div>
+    `;
+  }
+});
+
+/* Cancel handler */
 const cancelBtn = document.querySelector("#cancelBtn");
 const msgEl = document.querySelector("#actionMsg");
 
-if (String(shift.status) === "CANCELLED") {
+if (String(shift.status).toUpperCase() === "CANCELLED") {
   cancelBtn.disabled = true;
   cancelBtn.textContent = "Cancelled";
 } else {
@@ -92,13 +141,13 @@ if (String(shift.status) === "CANCELLED") {
       msgEl.innerHTML = `<div style="opacity:.85;">Cancelling…</div>`;
 
       const updated = await cancelShift({ shiftId });
-document.querySelector("#statusText").textContent = String(updated.status);
 
       msgEl.innerHTML = `<div class="wl-alert wl-alert--success">Shift cancelled.</div>`;
+      shift.status = updated.status;
       cancelBtn.textContent = "Cancelled";
     } catch (err) {
       console.error(err);
-      cancelBtn.disabled = true;
+      cancelBtn.disabled = false;
       msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to cancel shift.")}</div>`;
     }
   });
