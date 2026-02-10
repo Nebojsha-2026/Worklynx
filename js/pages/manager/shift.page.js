@@ -7,7 +7,11 @@ import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
 import { cancelShift } from "../../data/shifts.api.js";
-import { assignShiftToEmployee, unassignShiftFromEmployee } from "../../data/assignments.api.js";
+import {
+  assignShiftToEmployee,
+  unassignShiftFromEmployee,
+} from "../../data/assignments.api.js";
+import { listOrgMembers } from "../../data/members.api.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
 
@@ -37,12 +41,12 @@ main.innerHTML = `
     <div id="wlContent"></div>
   </div>
 `;
-
 main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 
 const content = main.querySelector("#wlContent");
 content.innerHTML = `<div style="opacity:.85;">Loading shift…</div>`;
 
+// Load shift
 const { data: shift, error } = await supabase
   .from("shifts")
   .select("*")
@@ -52,6 +56,15 @@ const { data: shift, error } = await supabase
 if (error || !shift) {
   content.innerHTML = `<div class="wl-alert wl-alert--error">Shift not found.</div>`;
   throw error;
+}
+
+// Load employees for dropdown
+let employees = [];
+try {
+  employees = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+} catch (e) {
+  // Don't hard-fail the whole page; show error in UI
+  employees = [];
 }
 
 content.innerHTML = `
@@ -68,20 +81,39 @@ content.innerHTML = `
     </div>
   </section>
 
-    <section class="wl-card wl-panel" style="margin-top:12px;">
-    <h2 style="margin:0 0 10px;">Assign employee (test)</h2>
+  <section class="wl-card wl-panel" style="margin-top:12px;">
+    <h2 style="margin:0 0 10px;">Assign employee</h2>
 
-    <form id="assignForm" class="wl-form">
-      <label>Employee user id</label>
-      <input id="employeeUserId" placeholder="Paste employee UUID here" required />
+    ${
+      employees.length
+        ? `
+      <form id="assignForm" class="wl-form">
+        <label>Select employee</label>
+        <select id="employeeSelect" required>
+          <option value="" selected disabled>Choose an employee…</option>
+          ${employees
+            .map(
+              (m) =>
+                `<option value="${escapeHtml(m.user_id)}">${escapeHtml(
+                  m.full_name || m.email || m.user_id
+                )}</option>`
+            )
+            .join("")}
+        </select>
 
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="wl-btn" type="submit">Assign to this shift</button>
-        <button id="unassignBtn" class="wl-btn" type="button">Unassign</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="wl-btn" type="submit">Assign</button>
+          <button id="unassignBtn" class="wl-btn" type="button">Unassign</button>
+        </div>
+      </form>
+      <div id="assignMsg" style="margin-top:10px;"></div>
+    `
+        : `
+      <div class="wl-alert wl-alert--error">
+        Could not load employees. (Make sure you have employee accounts in this company.)
       </div>
-    </form>
-
-    <div id="assignMsg" style="margin-top:10px;"></div>
+    `
+    }
   </section>
 
   <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
@@ -92,65 +124,62 @@ content.innerHTML = `
   <div id="actionMsg" style="margin-top:10px;"></div>
 `;
 
-/* Assign handler */
+// Only bind handlers if dropdown exists
 const assignForm = document.querySelector("#assignForm");
-const employeeUserIdEl = document.querySelector("#employeeUserId");
+const employeeSelect = document.querySelector("#employeeSelect");
 const assignMsg = document.querySelector("#assignMsg");
-
-assignForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const employeeUserId = employeeUserIdEl.value.trim();
-  if (!employeeUserId) return;
-
-  try {
-    assignMsg.innerHTML = `<div style="opacity:.85;">Assigning…</div>`;
-    const row = await assignShiftToEmployee({
-      shiftId,
-      employeeUserId,
-    });
-
-    assignMsg.innerHTML = `
-  <div class="wl-alert wl-alert--success">
-    Assigned ✅<br/>
-    <div style="font-size:13px; opacity:.9; margin-top:6px;">
-      employee_user_id: <code>${escapeHtml(row.employee_user_id)}</code><br/>
-      assigned_by_user_id: <code>${escapeHtml(row.assigned_by_user_id)}</code>
-    </div>
-  </div>
-`;
-
-  } catch (err) {
-    console.error(err);
-    assignMsg.innerHTML = `
-      <div class="wl-alert wl-alert--error">
-        ${escapeHtml(err.message || "Failed to assign.")}
-      </div>
-    `;
-  }
-});
-
 const unassignBtn = document.querySelector("#unassignBtn");
 
-unassignBtn.addEventListener("click", async () => {
-  const employeeUserId = employeeUserIdEl.value.trim();
-  if (!employeeUserId) {
-    assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">Paste an employee user id first.</div>`;
-    return;
-  }
+if (assignForm && employeeSelect && assignMsg && unassignBtn) {
+  assignForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-  const ok = confirm("Unassign this employee from the shift?");
-  if (!ok) return;
+    const employeeUserId = employeeSelect.value;
+    if (!employeeUserId) return;
 
-  try {
-    assignMsg.innerHTML = `<div style="opacity:.85;">Unassigning…</div>`;
-    await unassignShiftFromEmployee({ shiftId, employeeUserId });
-    assignMsg.innerHTML = `<div class="wl-alert wl-alert--success">Unassigned ✅</div>`;
-  } catch (err) {
-    console.error(err);
-    assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to unassign.")}</div>`;
-  }
-});
+    try {
+      assignMsg.innerHTML = `<div style="opacity:.85;">Assigning…</div>`;
+      const row = await assignShiftToEmployee({ shiftId, employeeUserId });
+
+      assignMsg.innerHTML = `
+        <div class="wl-alert wl-alert--success">
+          Assigned ✅<br/>
+          <div style="font-size:13px; opacity:.9; margin-top:6px;">
+            employee_user_id: <code>${escapeHtml(row.employee_user_id)}</code><br/>
+            assigned_by_user_id: <code>${escapeHtml(row.assigned_by_user_id)}</code>
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      console.error(err);
+      assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+        err.message || "Failed to assign."
+      )}</div>`;
+    }
+  });
+
+  unassignBtn.addEventListener("click", async () => {
+    const employeeUserId = employeeSelect.value;
+    if (!employeeUserId) {
+      assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">Choose an employee first.</div>`;
+      return;
+    }
+
+    const ok = confirm("Unassign this employee from the shift?");
+    if (!ok) return;
+
+    try {
+      assignMsg.innerHTML = `<div style="opacity:.85;">Unassigning…</div>`;
+      await unassignShiftFromEmployee({ shiftId, employeeUserId });
+      assignMsg.innerHTML = `<div class="wl-alert wl-alert--success">Unassigned ✅</div>`;
+    } catch (err) {
+      console.error(err);
+      assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+        err.message || "Failed to unassign."
+      )}</div>`;
+    }
+  });
+}
 
 /* Cancel handler */
 const cancelBtn = document.querySelector("#cancelBtn");
@@ -176,7 +205,9 @@ if (String(shift.status).toUpperCase() === "CANCELLED") {
     } catch (err) {
       console.error(err);
       cancelBtn.disabled = false;
-      msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to cancel shift.")}</div>`;
+      msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+        err.message || "Failed to cancel shift."
+      )}</div>`;
     }
   });
 }
