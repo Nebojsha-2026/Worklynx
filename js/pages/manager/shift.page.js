@@ -130,6 +130,28 @@ assignForm.addEventListener("submit", async (e) => {
   }
 });
 
+const unassignBtn = document.querySelector("#unassignBtn");
+
+unassignBtn.addEventListener("click", async () => {
+  const employeeUserId = employeeUserIdEl.value.trim();
+  if (!employeeUserId) {
+    assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">Paste an employee user id first.</div>`;
+    return;
+  }
+
+  const ok = confirm("Unassign this employee from the shift?");
+  if (!ok) return;
+
+  try {
+    assignMsg.innerHTML = `<div style="opacity:.85;">Unassigning…</div>`;
+    await unassignShiftFromEmployee({ shiftId, employeeUserId });
+    assignMsg.innerHTML = `<div class="wl-alert wl-alert--success">Unassigned ✅</div>`;
+  } catch (err) {
+    console.error(err);
+    assignMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to unassign.")}</div>`;
+  }
+});
+
 /* Cancel handler */
 const cancelBtn = document.querySelector("#cancelBtn");
 const msgEl = document.querySelector("#actionMsg");
