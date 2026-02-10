@@ -6,7 +6,6 @@ import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
-import { listShifts } from "../../data/shifts.api.js";
 import { path } from "../../core/config.js";
 
 await requireRole(["EMPLOYEE"]);
@@ -58,7 +57,7 @@ async function load() {
   listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
 
   const assigns = await listMyShiftAssignments();
-  const ids = assigns.map(a => a.shift_id);
+  const ids = assigns.map((a) => a.shift_id);
 
   if (!ids.length) {
     allShifts = [];
@@ -79,6 +78,21 @@ async function load() {
   render();
 }
 
+function render() {
+  const showCancelled = showCancelledEl.checked;
+
+  const filtered = allShifts.filter((s) => {
+    const st = String(s.status || "ACTIVE").toUpperCase();
+
+    // Employees should never see drafts
+    if (st === "DRAFT") return false;
+
+    // Cancelled hidden unless toggled on
+    if (!showCancelled && st === "CANCELLED") return false;
+
+    return true;
+  });
+
   if (!filtered.length) {
     listEl.innerHTML = `
       <div class="wl-alert" style="opacity:.95;">
@@ -88,6 +102,7 @@ async function load() {
     return;
   }
 
+  // Sort by date then start time (since start_at is TIME)
   filtered.sort((a, b) => {
     const ad = String(a.shift_date || "");
     const bd = String(b.shift_date || "");
@@ -99,8 +114,6 @@ async function load() {
 }
 
 function renderShiftRow(s) {
-  // Employee should use an employee shift detail page (we create next).
-  // For now, send them back to My Shifts if they click.
   const href = path(`/app/employee/shift.html?id=${encodeURIComponent(s.id)}`);
 
   return `
@@ -128,7 +141,6 @@ function renderStatusBadge(statusRaw) {
   const map = {
     ACTIVE: { cls: "wl-badge--active", label: "Active" },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
     OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
 
