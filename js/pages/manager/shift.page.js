@@ -63,7 +63,8 @@ content.innerHTML = `
       ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
       ${shift.hourly_rate != null ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>` : ""}
       ${shift.description ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>` : ""}
-      ${shift.status ? `<div><b>Status:</b> ${escapeHtml(String(shift.status))}</div>` : ""}
+     <div><b>Status:</b> <span id="statusText">${escapeHtml(String(shift.status || "ACTIVE"))}</span></div>
+
     </div>
   </section>
 
@@ -91,12 +92,13 @@ if (String(shift.status) === "CANCELLED") {
       msgEl.innerHTML = `<div style="opacity:.85;">Cancelling…</div>`;
 
       const updated = await cancelShift({ shiftId });
+document.querySelector("#statusText").textContent = String(updated.status);
 
       msgEl.innerHTML = `<div class="wl-alert wl-alert--success">Shift cancelled.</div>`;
       cancelBtn.textContent = "Cancelled";
     } catch (err) {
       console.error(err);
-      cancelBtn.disabled = false;
+      cancelBtn.disabled = true;
       msgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to cancel shift.")}</div>`;
     }
   });
