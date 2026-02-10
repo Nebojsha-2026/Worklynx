@@ -6,11 +6,12 @@ export async function listMyShiftAssignments() {
   const supabase = getSupabase();
   const session = await getSession();
   const userId = session?.user?.id;
+
   if (!userId) throw new Error("Not authenticated.");
 
   const { data, error } = await supabase
     .from("shift_assignments")
-    .select("shift_id, status, created_at")
+    .select("shift_id, created_at")
     .eq("employee_user_id", userId);
 
   if (error) throw error;
