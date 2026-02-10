@@ -56,24 +56,28 @@ let allShifts = [];
 
 async function load() {
   listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
-  allShifts = await listShifts({ organizationId: org.id, limit: 50 });
+
+  const assigns = await listMyShiftAssignments();
+  const ids = assigns.map(a => a.shift_id);
+
+  if (!ids.length) {
+    allShifts = [];
+    render();
+    return;
+  }
+
+  const supabase = getSupabase();
+  const { data: shifts, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .in("id", ids)
+    .limit(200);
+
+  if (error) throw error;
+
+  allShifts = shifts || [];
   render();
 }
-
-function render() {
-  const showCancelled = showCancelledEl.checked;
-
-  const filtered = allShifts.filter((s) => {
-  const st = String(s.status || "ACTIVE").toUpperCase();
-
-  // Employees should never see drafts
-  if (st === "DRAFT") return false;
-
-  // Cancelled hidden unless toggled on
-  if (!showCancelled && st === "CANCELLED") return false;
-
-  return true;
-});
 
   if (!filtered.length) {
     listEl.innerHTML = `
