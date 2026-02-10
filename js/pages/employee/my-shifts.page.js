@@ -87,8 +87,9 @@ function render() {
 }
 
 function renderShiftRow(s) {
-  const href = path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`); 
-  // NOTE: reuse existing shift detail page for now (read-only for employees in later steps)
+  // Employee should use an employee shift detail page (we create next).
+  // For now, send them back to My Shifts if they click.
+  const href = path(`/app/employee/shift.html?id=${encodeURIComponent(s.id)}`);
 
   return `
     <a class="wl-card wl-panel" href="${href}" style="display:block;">
