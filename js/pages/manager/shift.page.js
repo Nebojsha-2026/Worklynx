@@ -111,15 +111,15 @@ assignForm.addEventListener("submit", async (e) => {
     });
 
     assignMsg.innerHTML = `
-      <div class="wl-alert wl-alert--success">
-        Assigned ✅<br/>
-        <div style="font-size:13px; opacity:.9; margin-top:6px;">
-          employee_user_id: <code>${escapeHtml(row.employee_user_id)}</code><br/>
-          assigned_by_user_id: <code>${escapeHtml(row.assigned_by_user_id)}</code><br/>
-          status: <code>${escapeHtml(String(row.status))}</code>
-        </div>
-      </div>
-    `;
+  <div class="wl-alert wl-alert--success">
+    Assigned ✅<br/>
+    <div style="font-size:13px; opacity:.9; margin-top:6px;">
+      employee_user_id: <code>${escapeHtml(row.employee_user_id)}</code><br/>
+      assigned_by_user_id: <code>${escapeHtml(row.assigned_by_user_id)}</code>
+    </div>
+  </div>
+`;
+
   } catch (err) {
     console.error(err);
     assignMsg.innerHTML = `
