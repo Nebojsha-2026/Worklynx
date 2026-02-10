@@ -7,7 +7,7 @@ import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
 import { cancelShift } from "../../data/shifts.api.js";
-import { assignShiftToEmployee } from "../../data/assignments.api.js";
+import { assignShiftToEmployee, unassignShiftFromEmployee } from "../../data/assignments.api.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
 
