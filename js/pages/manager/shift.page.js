@@ -65,7 +65,6 @@ let employeesLoadError = null;
 try {
   const members = await listOrgMembers({ organizationId: org.id }); // no roles param
 employees = (members || []).filter((m) => String(m.role).toUpperCase() === "EMPLOYEE");
-  );
 } catch (e) {
   employeesLoadError = e;
   employees = [];
