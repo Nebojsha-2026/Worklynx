@@ -60,10 +60,13 @@ if (error || !shift) {
 
 // Load employees for dropdown
 let employees = [];
+let employeesLoadError = null;
+
 try {
-  employees = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+  const members = await listOrgMembers({ organizationId: org.id }); // no roles param
+  employees = (members || []).filter((m) => String(m.role).toUpperCase() === "EMPLOYEE");
 } catch (e) {
-  // Don't hard-fail the whole page; show error in UI
+  employeesLoadError = e;
   employees = [];
 }
 
