@@ -1,4 +1,6 @@
 // js/pages/employee/my-shifts.page.js
+import { getSupabase } from "../../core/supabaseClient.js";
+import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
