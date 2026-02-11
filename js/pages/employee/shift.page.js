@@ -9,7 +9,12 @@ import { path } from "../../core/config.js";
 
 import { getSession } from "../../core/session.js";
 import { getOrCreateTimesheetForShift } from "../../data/timesheets.api.js";
-import { getOpenTimeEntry, clockIn, clockOut } from "../../data/timeEntries.api.js";
+import {
+  getOpenTimeEntry,
+  clockIn,
+  clockOut,
+  addBreakMinutes,
+} from "../../data/timeEntries.api.js";
 
 await requireRole(["EMPLOYEE"]);
 
@@ -63,7 +68,7 @@ const isCancelled = status === "CANCELLED";
 const whenLabel = formatWhenLabel(shift.shift_date);
 const statusBadge = renderStatusBadge(status);
 
-// ---- Build UI shell (POLISHED) ----
+// ---- Build UI shell ----
 content.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
     <div style="min-width:0;">
@@ -137,7 +142,7 @@ content.innerHTML = `
   </div>
 `;
 
-// ---- Timesheet logic (UNCHANGED) ----
+// ---- Timesheet logic ----
 const tsStateEl = document.querySelector("#tsState");
 const tsBodyEl = document.querySelector("#tsBody");
 const tsMsgEl = document.querySelector("#tsMsg");
@@ -164,9 +169,25 @@ try {
 
   function renderTimesheetUI({ timesheet, openEntry, isCancelled }) {
     tsStateEl.textContent = openEntry ? "Clocked in" : "Ready";
-    tsStateEl.className = `wl-badge ${openEntry ? "wl-badge--active" : "wl-badge--draft"}`;
+    tsStateEl.className = `wl-badge ${
+      openEntry ? "wl-badge--active" : "wl-badge--draft"
+    }`;
 
-    const clockedInAt = openEntry?.clock_in ? new Date(openEntry.clock_in).toLocaleString() : null;
+    const clockedInAt = openEntry?.clock_in
+      ? new Date(openEntry.clock_in).toLocaleString()
+      : null;
+
+    const breakMins = Number(openEntry?.break_minutes || 0);
+
+    const breakKey = openEntry ? `wl_break_${openEntry.id}` : null;
+    const breakState = breakKey
+      ? safeJsonParse(localStorage.getItem(breakKey))
+      : null;
+    const isOnBreak = !!(breakState && breakState.startedAt);
+
+    const breakStartedLabel = isOnBreak
+      ? new Date(breakState.startedAt).toLocaleTimeString()
+      : null;
 
     tsBodyEl.innerHTML = `
       <div style="display:grid; gap:10px;">
@@ -178,16 +199,68 @@ try {
           openEntry
             ? `<div class="wl-alert">
                  ✅ You are clocked in.<br/>
-                 <span style="opacity:.85; font-size:13px;">Started: ${escapeHtml(clockedInAt)}</span>
+                 <span style="opacity:.85; font-size:13px;">Started: ${escapeHtml(clockedInAt)}</span><br/>
+                 <span style="opacity:.85; font-size:13px;">Break minutes: <b>${breakMins}</b></span>
                </div>`
             : `<div style="opacity:.9;">You are not clocked in.</div>`
+        }
+
+        ${
+          openEntry
+            ? `
+          <section class="wl-card wl-panel" style="padding:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:800;">Break</div>
+              ${
+                isOnBreak
+                  ? `<span class="wl-badge wl-badge--offered">On break</span>`
+                  : `<span class="wl-badge wl-badge--draft">Ready</span>`
+              }
+            </div>
+
+            <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              ${
+                isOnBreak
+                  ? `<div style="font-size:13px; opacity:.85;">
+                       Started at <b>${escapeHtml(breakStartedLabel)}</b>
+                     </div>`
+                  : `<input id="breakManualMins" type="number" min="1" step="1"
+                           placeholder="Add manual minutes (optional)"
+                           style="max-width:220px;" />`
+              }
+            </div>
+
+            <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+              ${
+                isOnBreak
+                  ? `<button id="breakEndBtn" class="wl-btn" type="button">End break</button>`
+                  : `<button id="breakStartBtn" class="wl-btn" type="button">Start break</button>`
+              }
+
+              <button id="breakAddBtn" class="wl-btn" type="button" ${
+                isOnBreak ? "disabled" : ""
+              }>
+                Add minutes
+              </button>
+            </div>
+
+            <div id="breakMsg" style="margin-top:10px;"></div>
+          </section>
+        `
+            : ""
         }
 
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           ${
             openEntry
-              ? `<button id="clockOutBtn" class="wl-btn" type="button">Clock out</button>`
-              : `<button id="clockInBtn" class="wl-btn" type="button" ${isCancelled ? "disabled" : ""}>
+              ? `<button id="clockOutBtn" class="wl-btn" type="button" ${
+                  isOnBreak ? "disabled" : ""
+                }>
+                   Clock out
+                 </button>`
+              : `<button id="clockInBtn" class="wl-btn" type="button" ${
+                  isCancelled ? "disabled" : ""
+                }>
                    Clock in
                  </button>`
           }
@@ -206,6 +279,12 @@ try {
     const clockInBtn = document.querySelector("#clockInBtn");
     const clockOutBtn = document.querySelector("#clockOutBtn");
 
+    const breakMsg = document.querySelector("#breakMsg");
+    const breakStartBtn = document.querySelector("#breakStartBtn");
+    const breakEndBtn = document.querySelector("#breakEndBtn");
+    const breakAddBtn = document.querySelector("#breakAddBtn");
+    const breakManualMins = document.querySelector("#breakManualMins");
+
     if (clockInBtn) {
       clockInBtn.addEventListener("click", async () => {
         if (isCancelled) return;
@@ -218,7 +297,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock in failed")}</div>`;
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Clock in failed"
+          )}</div>`;
         } finally {
           setBusy(clockInBtn, false, "Clock in");
         }
@@ -236,13 +317,108 @@ try {
           const latest = await getOpenTimeEntry({ timesheetId: timesheet.id });
           if (!latest) throw new Error("No open time entry found.");
           await clockOut({ timeEntryId: latest.id });
+
+          if (breakKey) localStorage.removeItem(breakKey);
+
           tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--success">Clocked out ✅</div>`;
           await refresh();
         } catch (err) {
           console.error(err);
-          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock out failed")}</div>`;
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Clock out failed"
+          )}</div>`;
         } finally {
           setBusy(clockOutBtn, false, "Clock out");
+        }
+      });
+    }
+
+    if (breakStartBtn && breakKey) {
+      breakStartBtn.addEventListener("click", async () => {
+        try {
+          breakMsg.innerHTML = "";
+          localStorage.setItem(breakKey, JSON.stringify({ startedAt: Date.now() }));
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--success">Break started ✅</div>`;
+          await refresh();
+        } catch (err) {
+          console.error(err);
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to start break"
+          )}</div>`;
+        }
+      });
+    }
+
+    if (breakEndBtn && breakKey) {
+      breakEndBtn.addEventListener("click", async () => {
+        const state = safeJsonParse(localStorage.getItem(breakKey));
+        const startedAt = state?.startedAt;
+
+        if (!startedAt) {
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">No break is currently running.</div>`;
+          return;
+        }
+
+        const diffMs = Date.now() - startedAt;
+        const diffMins = Math.max(1, Math.ceil(diffMs / 60000));
+
+        const ok = confirm(`End break and add ${diffMins} minute(s)?`);
+        if (!ok) return;
+
+        try {
+          setBusy(breakEndBtn, true, "Ending…");
+          breakMsg.innerHTML = `<div style="opacity:.85;">Saving break…</div>`;
+
+          await addBreakMinutes({
+            timeEntryId: openEntry.id,
+            addMinutes: diffMins,
+          });
+
+          localStorage.removeItem(breakKey);
+
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--success">Break saved ✅ (+${diffMins} min)</div>`;
+          await refresh();
+        } catch (err) {
+          console.error(err);
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to end break"
+          )}</div>`;
+        } finally {
+          setBusy(breakEndBtn, false, "End break");
+        }
+      });
+    }
+
+    if (breakAddBtn && breakManualMins) {
+      breakAddBtn.addEventListener("click", async () => {
+        const mins = Number(breakManualMins.value);
+        if (!Number.isFinite(mins) || mins <= 0) {
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">Enter break minutes greater than 0.</div>`;
+          return;
+        }
+
+        const ok = confirm(`Add ${Math.round(mins)} break minute(s)?`);
+        if (!ok) return;
+
+        try {
+          setBusy(breakAddBtn, true, "Saving…");
+          breakMsg.innerHTML = `<div style="opacity:.85;">Saving break…</div>`;
+
+          await addBreakMinutes({
+            timeEntryId: openEntry.id,
+            addMinutes: mins,
+          });
+
+          breakManualMins.value = "";
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--success">Break saved ✅</div>`;
+          await refresh();
+        } catch (err) {
+          console.error(err);
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to add break"
+          )}</div>`;
+        } finally {
+          setBusy(breakAddBtn, false, "Add minutes");
         }
       });
     }
@@ -252,7 +428,9 @@ try {
   tsStateEl.textContent = "Error";
   tsStateEl.className = "wl-badge wl-badge--cancelled";
   tsBodyEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load timesheet.</div>`;
-  tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "")}</div>`;
+  tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+    err.message || ""
+  )}</div>`;
 }
 
 // ---- Helpers ----
@@ -260,6 +438,14 @@ function setBusy(btn, isBusy, label) {
   if (!btn) return;
   btn.disabled = !!isBusy;
   if (label) btn.textContent = label;
+}
+
+function safeJsonParse(s) {
+  try {
+    return s ? JSON.parse(s) : null;
+  } catch {
+    return null;
+  }
 }
 
 function renderStatusBadge(status) {
