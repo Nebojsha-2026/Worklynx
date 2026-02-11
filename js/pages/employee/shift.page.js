@@ -188,21 +188,23 @@ try {
       <div style="display:grid; gap:10px;">
 
         ${
-          totals
-            ? `<div class="wl-alert wl-alert--success">
-                 <div style="font-size:13px; opacity:.85; margin-top:6px;">
-  ${breakIsPaid ? "Pay includes break minutes." : "Pay excludes unpaid break minutes."}
-  <br/>
-  Pay calculated from: <b>${escapeHtml(totals.paidRoundedLabel)}</b>
-</div>
+  totals
+    ? `<div class="wl-alert wl-alert--success">
+         <div><b>Total worked:</b> ${escapeHtml(totals.workedLabel)}</div>
+         ${
+           totals.payLabel
+             ? `<div style="margin-top:6px;"><b>Estimated pay:</b> ${escapeHtml(totals.payLabel)}</div>`
+             : ""
+         }
 
-                 <div style="font-size:13px; opacity:.85; margin-top:6px;">
-                   ${breakIsPaid ? "Includes break minutes." : "Excludes unpaid break minutes."}
-                 </div>
-               </div>`
-            : ""
-        }
-
+         <div style="font-size:13px; opacity:.85; margin-top:6px;">
+           ${breakIsPaid ? "Pay includes break minutes." : "Pay excludes unpaid break minutes."}
+           <br/>
+           Pay calculated from: <b>${escapeHtml(totals.paidRoundedLabel)}</b>
+         </div>
+       </div>`
+    : ""
+}
         ${
           openEntry
             ? `<div class="wl-alert">
