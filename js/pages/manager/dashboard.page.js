@@ -66,7 +66,7 @@ async function loadUpcoming() {
     const all = await listShifts({ organizationId: org.id, limit: 200 });
 
     // Only show ACTIVE + OFFERED in "Upcoming"
-    const allowed = new Set(["ACTIVE", "OFFERED"]);
+    const allowed = new Set(["PUBLISHED", "ACTIVE", "OFFERED"]);
     const visible = (all || []).filter((s) =>
       allowed.has(String(s.status || "ACTIVE").toUpperCase())
     );
@@ -238,11 +238,13 @@ function renderShiftCard(s, assignedIds, labelMap) {
 function renderStatusBadge(statusRaw) {
   const status = String(statusRaw || "ACTIVE").toUpperCase();
   const map = {
-    ACTIVE: { cls: "wl-badge--active", label: "Active" },
-    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
-    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
+  PUBLISHED: { cls: "wl-badge--active", label: "Active" },
+  ACTIVE: { cls: "wl-badge--active", label: "Active" },
+  CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+  DRAFT: { cls: "wl-badge--draft", label: "Draft" },
+  OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
+  
   const s = map[status] || { cls: "", label: status };
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
