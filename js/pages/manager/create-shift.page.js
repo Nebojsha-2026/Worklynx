@@ -5,25 +5,16 @@ import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { createShift } from "../../data/shifts.api.js";
+import { listOrgMembers } from "../../data/members.api.js";
+import { assignShiftToEmployee } from "../../data/assignments.api.js";
+import { path } from "../../core/config.js";
 
-// Only BO/BM/MANAGER can create shifts
 await requireRole(["BO", "BM", "MANAGER"]);
 
 const org = await loadOrgContext();
 
-function splitDateTime(dtLocal) {
-  const [d, t] = String(dtLocal).split("T");
-  return {
-    date: d,
-    time: t && t.length === 5 ? `${t}:00` : t,
-  };
-}
-
 document.body.prepend(
-  renderHeader({
-    companyName: org.name,
-    companyLogoUrl: org.company_logo_url,
-  })
+  renderHeader({ companyName: org.name, companyLogoUrl: org.company_logo_url })
 );
 document.body.append(renderFooter({ version: "v0.1.0" }));
 
@@ -34,13 +25,16 @@ main.innerHTML = `
     <div id="wlContent"></div>
   </div>
 `;
-
 main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 
-main.querySelector("#wlContent").innerHTML = `
-  <h1>Create shift</h1>
+const content = main.querySelector("#wlContent");
+content.innerHTML = `
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h1 style="margin:0;">Create shift</h1>
+    <a class="wl-btn" href="${path("/app/manager/shifts.html")}">← Back to shifts</a>
+  </div>
 
-  <section class="wl-card wl-panel">
+  <section class="wl-card wl-panel" style="margin-top:12px;">
     <form id="shiftForm" class="wl-form">
 
       <label>Title</label>
@@ -52,49 +46,61 @@ main.querySelector("#wlContent").innerHTML = `
       <label>Location</label>
       <input id="location" placeholder="Main warehouse" />
 
-      <label>Hourly rate</label>
-      <input id="rate" type="number" step="0.01" min="0" required placeholder="e.g. 35.00" />
+      <div class="wl-form__row">
+        <div>
+          <label>Hourly rate</label>
+          <input id="rate" type="number" step="0.01" min="0" required placeholder="e.g. 35.00" />
+        </div>
+
+        <div>
+          <label>Assign employee (optional)</label>
+          <select id="employeeSelect">
+            <option value="" selected>(No assignment)</option>
+          </select>
+          <div style="font-size:12px; opacity:.75; margin-top:6px;">
+            You can also assign later from shift details.
+          </div>
+        </div>
+      </div>
 
       <div class="wl-form__row">
         <div>
-          <label>Start</label>
-          <input id="startAt" type="datetime-local" required />
+          <label>Start date</label>
+          <input id="startDate" type="date" required />
         </div>
         <div>
-          <label>End</label>
-          <input id="endAt" type="datetime-local" required />
+          <label>Start time</label>
+          <select id="startTime" required></select>
         </div>
       </div>
 
-      <!-- NEW: Break options (optional) -->
-      <div class="wl-card wl-panel" style="padding:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-          <div style="font-weight:800;">Break (optional)</div>
-          <label style="display:flex; align-items:center; gap:10px; font-size:13px; opacity:.9;">
-            <input id="hasBreak" type="checkbox" />
-            Has break
-          </label>
+      <div class="wl-form__row">
+        <div>
+          <label>End date</label>
+          <input id="endDate" type="date" required />
         </div>
-
-        <div id="breakFields" style="display:none; margin-top:10px;">
-          <div class="wl-form__row">
-            <div>
-              <label>Break minutes</label>
-              <input id="breakMinutes" type="number" min="0" step="1" placeholder="e.g. 30" />
-            </div>
-            <div style="display:flex; align-items:flex-end;">
-              <label style="display:flex; align-items:center; gap:10px; margin:0;">
-                <input id="breakIsPaid" type="checkbox" />
-                Break is paid
-              </label>
-            </div>
-          </div>
-
-          <div style="font-size:13px; opacity:.8; margin-top:6px;">
-            If unpaid, break minutes are subtracted from paid time.
-          </div>
+        <div>
+          <label>End time</label>
+          <select id="endTime" required></select>
         </div>
       </div>
+
+      <div class="wl-form__row">
+        <div>
+          <label>Break (optional)</label>
+          <select id="breakMode">
+            <option value="NONE" selected>No break</option>
+            <option value="PAID">Paid break</option>
+            <option value="UNPAID">Unpaid break</option>
+          </select>
+        </div>
+        <div>
+          <label>Break minutes</label>
+          <input id="breakMinutes" type="number" min="0" step="1" value="0" disabled />
+        </div>
+      </div>
+
+      <div id="hint" style="font-size:13px; opacity:.85;"></div>
 
       <button class="wl-btn" type="submit">Create shift</button>
     </form>
@@ -103,147 +109,252 @@ main.querySelector("#wlContent").innerHTML = `
   </section>
 `;
 
-const hasBreakEl = document.querySelector("#hasBreak");
-const breakFieldsEl = document.querySelector("#breakFields");
+const hintEl = document.querySelector("#hint");
+const resultEl = document.querySelector("#result");
+
+const titleEl = document.querySelector("#title");
+const descEl = document.querySelector("#description");
+const locEl = document.querySelector("#location");
+const rateEl = document.querySelector("#rate");
+
+const employeeSelect = document.querySelector("#employeeSelect");
+
+const startDateEl = document.querySelector("#startDate");
+const endDateEl = document.querySelector("#endDate");
+const startTimeEl = document.querySelector("#startTime");
+const endTimeEl = document.querySelector("#endTime");
+
+const breakModeEl = document.querySelector("#breakMode");
 const breakMinutesEl = document.querySelector("#breakMinutes");
-const breakIsPaidEl = document.querySelector("#breakIsPaid");
 
-// default: no break
-hasBreakEl.checked = false;
-breakFieldsEl.style.display = "none";
-breakMinutesEl.value = "";
-breakIsPaidEl.checked = false;
-
-hasBreakEl.addEventListener("change", () => {
-  const on = !!hasBreakEl.checked;
-  breakFieldsEl.style.display = on ? "block" : "none";
-  if (!on) {
-    breakMinutesEl.value = "";
-    breakIsPaidEl.checked = false;
+// Populate time dropdowns (30-min intervals)
+function buildTimeOptions() {
+  const opts = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const hh = String(h).padStart(2, "0");
+      const mm = String(m).padStart(2, "0");
+      opts.push(`${hh}:${mm}:00`);
+    }
   }
-});
+  return opts;
+}
+function renderTimeSelect(selectEl) {
+  const times = buildTimeOptions();
+  selectEl.innerHTML = times
+    .map((t) => {
+      const label = t.slice(0, 5); // HH:MM
+      return `<option value="${t}">${label}</option>`;
+    })
+    .join("");
+}
+renderTimeSelect(startTimeEl);
+renderTimeSelect(endTimeEl);
 
+// Default dates (today)
+const today = new Date();
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, "0");
+const dd = String(today.getDate()).padStart(2, "0");
+const todayStr = `${yyyy}-${mm}-${dd}`;
+startDateEl.value = todayStr;
+endDateEl.value = todayStr;
+
+// Default times
+startTimeEl.value = "09:00:00";
+endTimeEl.value = "17:00:00";
+
+// Break enable/disable
+breakModeEl.addEventListener("change", () => {
+  const mode = breakModeEl.value;
+  const enabled = mode !== "NONE";
+  breakMinutesEl.disabled = !enabled;
+  if (!enabled) breakMinutesEl.value = "0";
+  updateHint();
+});
+breakMinutesEl.addEventListener("input", updateHint);
+startDateEl.addEventListener("change", () => {
+  // keep end date aligned by default
+  if (!endDateEl.value) endDateEl.value = startDateEl.value;
+  updateHint();
+});
+endDateEl.addEventListener("change", updateHint);
+startTimeEl.addEventListener("change", updateHint);
+endTimeEl.addEventListener("change", updateHint);
+
+// Load employees for assignment dropdown
+try {
+  const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+  const employees = (members || []).filter((m) => String(m.role).toUpperCase() === "EMPLOYEE");
+
+  employeeSelect.innerHTML = `
+    <option value="" selected>(No assignment)</option>
+    ${employees
+      .map((m) => {
+        const label = (m.full_name || m.email || m.user_id || "").toString();
+        return `<option value="${escapeHtml(m.user_id)}">${escapeHtml(label)}</option>`;
+      })
+      .join("")}
+  `;
+} catch (e) {
+  // Don't block creation if employees can't load
+  console.warn("Could not load employees", e);
+}
+
+function dtMs(dateStr, timeStr) {
+  // dateStr: YYYY-MM-DD, timeStr: HH:MM:SS
+  return new Date(`${dateStr}T${timeStr}`).getTime();
+}
+
+function updateHint() {
+  hintEl.innerHTML = "";
+
+  const sd = startDateEl.value;
+  const ed = endDateEl.value;
+  const st = startTimeEl.value;
+  const et = endTimeEl.value;
+
+  if (!sd || !ed || !st || !et) return;
+
+  const start = dtMs(sd, st);
+  const end = dtMs(ed, et);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+
+  if (end <= start) {
+    hintEl.innerHTML = `<div class="wl-alert wl-alert--error">End must be after start.</div>`;
+    return;
+  }
+
+  const mins = Math.floor((end - start) / 60000);
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+
+  const mode = breakModeEl.value;
+  const breakMins = Number(breakMinutesEl.value || 0);
+
+  let breakText = "No break";
+  if (mode === "PAID") breakText = `Paid break: ${breakMins} min`;
+  if (mode === "UNPAID") breakText = `Unpaid break: ${breakMins} min`;
+
+  hintEl.innerHTML = `
+    <div style="font-size:13px; opacity:.9;">
+      Duration: <b>${hours}h ${rem}m</b> • ${escapeHtml(breakText)}
+    </div>
+  `;
+}
+updateHint();
+
+// Submit
 document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-
-  const resultEl = document.querySelector("#result");
   const btn = e.target.querySelector('button[type="submit"]');
 
-  const title = document.querySelector("#title").value.trim();
-  const description = document.querySelector("#description").value.trim();
-  const location = document.querySelector("#location").value.trim();
-  const rateRaw = document.querySelector("#rate").value;
-  const startAt = document.querySelector("#startAt").value;
-  const endAt = document.querySelector("#endAt").value;
+  resultEl.innerHTML = "";
+  hintEl.innerHTML = "";
 
-  const hourlyRate = Number(rateRaw);
+  const title = titleEl.value.trim();
+  const description = descEl.value.trim();
+  const location = locEl.value.trim();
+  const hourlyRate = Number(rateEl.value);
 
-  if (!title) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">Title is required.</div>`;
-    return;
-  }
-  if (!startAt) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">Start time is required.</div>`;
-    return;
-  }
-  if (!endAt) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">End time is required.</div>`;
-    return;
-  }
-  if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">Hourly rate must be greater than 0.</div>`;
-    return;
-  }
+  const shift_date = startDateEl.value;
+  const end_date = endDateEl.value;
+  const start_at = startTimeEl.value;
+  const end_at = endTimeEl.value;
 
-  const start = splitDateTime(startAt);
-  const end = splitDateTime(endAt);
+  const breakMode = breakModeEl.value;
+  const breakMinutes = Number(breakMinutesEl.value || 0);
+  const break_is_paid = breakMode === "PAID";
+  const hasBreak = breakMode !== "NONE";
 
-  if (start.date !== end.date) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">Start and end must be on the same date (for now).</div>`;
-    return;
-  }
+  if (!title) return showErr("Title is required.");
+  if (!shift_date) return showErr("Start date is required.");
+  if (!end_date) return showErr("End date is required.");
+  if (!start_at) return showErr("Start time is required.");
+  if (!end_at) return showErr("End time is required.");
+  if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) return showErr("Hourly rate must be greater than 0.");
 
-  const startMs = new Date(`${start.date}T${start.time}`).getTime();
-  const endMs = new Date(`${end.date}T${end.time}`).getTime();
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">Invalid date/time.</div>`;
-    return;
-  }
-  if (endMs <= startMs) {
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">End time must be after start time.</div>`;
-    return;
+  const startMs = dtMs(shift_date, start_at);
+  const endMs = dtMs(end_date, end_at);
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return showErr("Invalid date/time.");
+  if (endMs <= startMs) return showErr("End must be after start.");
+
+  if (hasBreak && (!Number.isFinite(breakMinutes) || breakMinutes < 0)) {
+    return showErr("Break minutes must be 0 or more.");
   }
 
-  // Break payload (optional)
-  let break_minutes = 0;
-  let break_is_paid = false;
-
-  if (hasBreakEl.checked) {
-    const mins = Number(breakMinutesEl.value);
-    if (!Number.isFinite(mins) || mins < 0) {
-      resultEl.innerHTML = `<div style="color:#ffb3b3;">Break minutes must be 0 or more.</div>`;
-      return;
-    }
-    break_minutes = Math.round(mins);
-    break_is_paid = !!breakIsPaidEl.checked;
-
-    // If minutes is 0, paid/unpaid is irrelevant; normalize to false.
-    if (break_minutes === 0) break_is_paid = false;
-  }
-
+  // Payload (requires shifts.end_date column)
   const payload = {
     organization_id: org.id,
     title,
     description,
     location,
     hourly_rate: hourlyRate,
-    shift_date: start.date,
-    start_at: start.time,
-    end_at: end.time,
-
-    // Your schema already has break_minutes; keep it always present.
-    break_minutes,
-
-    // Optional flag; safe even when break_minutes = 0
-    break_is_paid,
+    shift_date,
+    end_date,
+    start_at,
+    end_at,
+    // these two assume you added/kept them in shifts table
+    break_minutes: hasBreak ? breakMinutes : 0,
+    break_is_paid: hasBreak ? break_is_paid : true, // irrelevant if no break
   };
 
   try {
-    resultEl.innerHTML = `<div style="opacity:.85;">Creating shift…</div>`;
     btn.disabled = true;
+    resultEl.innerHTML = `<div style="opacity:.85;">Creating shift…</div>`;
 
     const shift = await createShift(payload);
 
-    const breakSummary =
-      (shift.break_minutes || 0) > 0
-        ? `${shift.break_minutes} min (${shift.break_is_paid ? "paid" : "unpaid"})`
-        : "No break";
+    // Optional assign immediately
+    const employeeUserId = employeeSelect.value || "";
+    if (employeeUserId) {
+      await assignShiftToEmployee({ shiftId: shift.id, employeeUserId });
+    }
 
     resultEl.innerHTML = `
-      <div class="wl-card" style="padding:12px;">
-        <strong>Shift created</strong><br/>
+      <div class="wl-alert wl-alert--success">
+        <b>Shift created ✅</b><br/>
         <div style="opacity:.9; margin-top:6px;">
-          <div><b>${shift.title}</b></div>
+          <div><b>${escapeHtml(shift.title)}</b></div>
           <div style="font-size:13px; opacity:.85;">
-            ${shift.shift_date} • ${shift.start_at} → ${shift.end_at}
+            ${escapeHtml(shift.shift_date)} ${escapeHtml(shift.start_at)} → ${escapeHtml(shift.end_date)} ${escapeHtml(shift.end_at)}
           </div>
-          <div style="font-size:13px; opacity:.85; margin-top:6px;">
-            Break: <b>${breakSummary}</b>
-          </div>
+          ${employeeUserId ? `<div style="font-size:13px; opacity:.85; margin-top:6px;">Employee assigned ✅</div>` : ""}
         </div>
       </div>
     `;
 
     e.target.reset();
-    // restore defaults
-    hasBreakEl.checked = false;
-    breakFieldsEl.style.display = "none";
-    breakMinutesEl.value = "";
-    breakIsPaidEl.checked = false;
+
+    // Restore defaults after reset
+    startDateEl.value = todayStr;
+    endDateEl.value = todayStr;
+    startTimeEl.value = "09:00:00";
+    endTimeEl.value = "17:00:00";
+    breakModeEl.value = "NONE";
+    breakMinutesEl.value = "0";
+    breakMinutesEl.disabled = true;
+    employeeSelect.value = "";
+
+    updateHint();
   } catch (err) {
     console.error(err);
-    resultEl.innerHTML = `<div style="color:#ffb3b3;">${err.message || "Failed to create shift."}</div>`;
+    showErr(err?.message || "Failed to create shift.");
   } finally {
     btn.disabled = false;
   }
 });
+
+function showErr(msg) {
+  resultEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(msg)}</div>`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
