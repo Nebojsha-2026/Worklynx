@@ -7,6 +7,10 @@ import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
 
+import { getSession } from "../../core/session.js";
+import { getOrCreateTimesheetForShift } from "../../data/timesheets.api.js";
+import { getOpenTimeEntry, clockIn, clockOut } from "../../data/timeEntries.api.js";
+
 await requireRole(["EMPLOYEE"]);
 
 const params = new URLSearchParams(window.location.search);
@@ -20,9 +24,6 @@ if (!shiftId) {
 const org = await loadOrgContext();
 const supabase = getSupabase();
 
-/* --------------------------
-   Layout
---------------------------- */
 document.body.prepend(
   renderHeader({
     companyName: org.name,
@@ -44,9 +45,7 @@ main.querySelector("#wlSidebar").append(renderSidebar("EMPLOYEE"));
 const content = main.querySelector("#wlContent");
 content.innerHTML = `<div style="opacity:.85;">Loading shift…</div>`;
 
-/* --------------------------
-   Load shift
---------------------------- */
+// ---- Load shift ----
 const { data: shift, error } = await supabase
   .from("shifts")
   .select("*")
@@ -54,120 +53,186 @@ const { data: shift, error } = await supabase
   .single();
 
 if (error || !shift) {
-  content.innerHTML = `
-    <div class="wl-alert wl-alert--error">
-      Shift not found.
-    </div>
-  `;
+  content.innerHTML = `<div class="wl-alert wl-alert--error">Shift not found.</div>`;
   throw error;
 }
 
 const status = String(shift.status || "PUBLISHED").toUpperCase();
 const isCancelled = status === "CANCELLED";
 
-/* --------------------------
-   Render
---------------------------- */
+// ---- Build UI shell ----
 content.innerHTML = `
-  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <div>
-      <h1 style="margin:0;">${escapeHtml(shift.title || "Untitled shift")}</h1>
-      <div style="margin-top:6px;">
-        ${renderStatusBadge(status)}
-      </div>
-    </div>
-  </div>
+  <h1>${escapeHtml(shift.title || "Shift details")}</h1>
 
-  <section class="wl-card wl-panel" style="margin-top:14px;">
+  <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:grid; gap:10px;">
-      <div>
-        <b>Date:</b> ${escapeHtml(formatWhenLabel(shift.shift_date))}
-      </div>
-
-      <div>
-        <b>Time:</b> ${escapeHtml(shift.start_at)} → ${escapeHtml(shift.end_at)}
-      </div>
-
-      ${
-        shift.location
-          ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>`
-          : ""
-      }
-
-      ${
-        shift.description
-          ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>`
-          : ""
-      }
+      <div><b>Status:</b> ${escapeHtml(statusLabel(status))}</div>
+      <div><b>Date:</b> ${escapeHtml(shift.shift_date || "")}</div>
+      <div><b>Time:</b> ${escapeHtml(shift.start_at || "")} → ${escapeHtml(shift.end_at || "")}</div>
+      ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
+      ${shift.hourly_rate != null ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>` : ""}
+      ${shift.description ? `<div><b>Description:</b><br/>${escapeHtml(shift.description)}</div>` : ""}
     </div>
   </section>
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
-    <div style="font-weight:700;">Assignment</div>
-
-    <div style="margin-top:6px; font-size:14px;">
-      ✅ You are assigned to this shift
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+      <h2 style="margin:0;">Timesheet</h2>
+      <span class="wl-badge wl-badge--draft" id="tsState">Loading…</span>
     </div>
 
-    ${
-      isCancelled
-        ? `
-          <div style="margin-top:10px; font-size:14px; opacity:.9;">
-            ⚠️ This shift has been cancelled.
-            <div style="font-size:13px; opacity:.85; margin-top:4px;">
-              You do not need to attend.
-            </div>
-          </div>
-        `
-        : `
-          <div style="margin-top:8px; font-size:13px; opacity:.85;">
-            Please attend as scheduled. If you have questions, contact your manager.
-          </div>
-        `
-    }
+    <div id="tsBody" style="margin-top:12px;">
+      <div style="opacity:.85;">Preparing timesheet…</div>
+    </div>
+
+    <div id="tsMsg" style="margin-top:10px;"></div>
   </section>
 
   <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
-  <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">← Back to My shifts</a>
-
-  <a class="wl-btn" href="${path(`/app/employee/timesheet-new.html?shiftId=${encodeURIComponent(shiftId)}`)}">
-    + Create timesheet entry
-  </a>
-</div>
+    <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">← Back</a>
+  </div>
 `;
 
-/* --------------------------
-   Helpers
---------------------------- */
-function renderStatusBadge(status) {
-  const map = {
-    PUBLISHED: { cls: "wl-badge--active", label: "Active" },
-    ACTIVE: { cls: "wl-badge--active", label: "Active" },
-    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
-    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
-  };
+// ---- Timesheet logic ----
+const tsStateEl = document.querySelector("#tsState");
+const tsBodyEl = document.querySelector("#tsBody");
+const tsMsgEl = document.querySelector("#tsMsg");
 
-  const s = map[status] || { cls: "", label: status };
-  return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
+try {
+  // If cancelled, we can still show the timesheet, but block new clock-ins.
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error("Not authenticated.");
+
+  const timesheet = await getOrCreateTimesheetForShift({
+    shiftId,
+    organizationId: org.id,
+  });
+
+  // Check if currently clocked in
+  let openEntry = await getOpenTimeEntry({ timesheetId: timesheet.id });
+
+  renderTimesheetUI({ timesheet, openEntry, isCancelled });
+
+  async function refresh() {
+    tsMsgEl.innerHTML = "";
+    openEntry = await getOpenTimeEntry({ timesheetId: timesheet.id });
+    renderTimesheetUI({ timesheet, openEntry, isCancelled });
+  }
+
+  function renderTimesheetUI({ timesheet, openEntry, isCancelled }) {
+    // Status pill
+    tsStateEl.textContent = openEntry ? "Clocked in" : "Ready";
+    tsStateEl.className = `wl-badge ${openEntry ? "wl-badge--active" : "wl-badge--draft"}`;
+
+    const clockedInAt = openEntry?.clock_in ? new Date(openEntry.clock_in).toLocaleString() : null;
+
+    tsBodyEl.innerHTML = `
+      <div style="display:grid; gap:10px;">
+        <div style="opacity:.9;">
+          <b>Timesheet status:</b> ${escapeHtml(String(timesheet.status || "OPEN"))}
+        </div>
+
+        ${
+          openEntry
+            ? `<div class="wl-alert">
+                 ✅ You are clocked in.<br/>
+                 <span style="opacity:.85; font-size:13px;">Started: ${escapeHtml(clockedInAt)}</span>
+               </div>`
+            : `<div style="opacity:.9;">
+                 You are not clocked in.
+               </div>`
+        }
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          ${
+            openEntry
+              ? `<button id="clockOutBtn" class="wl-btn" type="button">Clock out</button>`
+              : `<button id="clockInBtn" class="wl-btn" type="button" ${isCancelled ? "disabled" : ""}>
+                   Clock in
+                 </button>`
+          }
+        </div>
+
+        ${
+          isCancelled
+            ? `<div class="wl-alert wl-alert--error" style="opacity:.95;">
+                 This shift is cancelled. Clocking in is disabled.
+               </div>`
+            : ""
+        }
+      </div>
+    `;
+
+    const clockInBtn = document.querySelector("#clockInBtn");
+    const clockOutBtn = document.querySelector("#clockOutBtn");
+
+    if (clockInBtn) {
+      clockInBtn.addEventListener("click", async () => {
+        if (isCancelled) return;
+
+        try {
+          setBusy(clockInBtn, true, "Clocking in…");
+          tsMsgEl.innerHTML = "";
+          await clockIn({ timesheetId: timesheet.id });
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--success">Clocked in ✅</div>`;
+          await refresh();
+        } catch (err) {
+          console.error(err);
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock in failed")}</div>`;
+        } finally {
+          setBusy(clockInBtn, false, "Clock in");
+        }
+      });
+    }
+
+    if (clockOutBtn) {
+      clockOutBtn.addEventListener("click", async () => {
+        const ok = confirm("Clock out now?");
+        if (!ok) return;
+
+        try {
+          setBusy(clockOutBtn, true, "Clocking out…");
+          tsMsgEl.innerHTML = "";
+          const latest = await getOpenTimeEntry({ timesheetId: timesheet.id });
+          if (!latest) throw new Error("No open time entry found.");
+          await clockOut({ timeEntryId: latest.id });
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--success">Clocked out ✅</div>`;
+          await refresh();
+        } catch (err) {
+          console.error(err);
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock out failed")}</div>`;
+        } finally {
+          setBusy(clockOutBtn, false, "Clock out");
+        }
+      });
+    }
+  }
+} catch (err) {
+  console.error(err);
+  tsStateEl.textContent = "Error";
+  tsStateEl.className = "wl-badge wl-badge--cancelled";
+  tsBodyEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load timesheet.</div>`;
+  tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "")}</div>`;
 }
 
-function formatWhenLabel(yyyyMmDd) {
-  if (!yyyyMmDd) return "";
+// ---- Helpers ----
+function setBusy(btn, isBusy, label) {
+  if (!btn) return;
+  btn.disabled = !!isBusy;
+  if (label) btn.textContent = label;
+}
 
-  const [y, m, d] = String(yyyyMmDd).split("-").map(Number);
-  if (!y || !m || !d) return yyyyMmDd;
-
-  const today = new Date();
-  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const date = new Date(y, m - 1, d);
-
-  const diffDays = Math.round((date - base) / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Tomorrow";
-
-  return yyyyMmDd;
+function statusLabel(status) {
+  const s = String(status || "").toUpperCase();
+  const map = {
+    PUBLISHED: "Active",
+    ACTIVE: "Active",
+    OFFERED: "Offered",
+    DRAFT: "Draft",
+    CANCELLED: "Cancelled",
+  };
+  return map[s] || s || "Active";
 }
 
 function escapeHtml(str) {
