@@ -63,7 +63,8 @@ async function loadUpcoming() {
       return;
     }
 
-    // Employees map (user_id -> label)
+    // Employee label map (user_id -> label)
+    // NOTE: this assumes listOrgMembers supports roles param. If yours doesn't, remove roles and filter.
     const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
     const employeeLabelById = new Map(
       (members || []).map((m) => [
@@ -77,7 +78,7 @@ async function loadUpcoming() {
     const assigns = await listAssignmentsForShifts({ shiftIds });
 
     const assignedByShift = new Map(); // shiftId -> [employee_user_id]
-    for (const a of assigns) {
+    for (const a of assigns || []) {
       const arr = assignedByShift.get(a.shift_id) || [];
       arr.push(a.employee_user_id);
       assignedByShift.set(a.shift_id, arr);
@@ -85,12 +86,18 @@ async function loadUpcoming() {
 
     listEl.innerHTML = `
       <div style="display:grid; gap:10px;">
-        ${shifts.map((s) => renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById)).join("")}
+        ${shifts
+          .map((s) => renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById))
+          .join("")}
       </div>
     `;
   } catch (err) {
     console.error(err);
-    listEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts: ${escapeHtml(err.message || "Unknown error")}</div>`;
+    listEl.innerHTML = `
+      <div class="wl-alert wl-alert--error">
+        Failed to load shifts: ${escapeHtml(err?.message || "Unknown error")}
+      </div>
+    `;
   }
 }
 
@@ -105,21 +112,35 @@ function renderShiftCard(s, assignedIds, labelMap) {
       <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
         <div>
           <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
-          <div style="font-size:13px; opacity:.85; margin-top:4px;">
-            ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
-          </div>
-          ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
 
-          <div style="margin-top:8px; font-size:13px; opacity:.9;">
+          <div style="font-size:13px; opacity:.85; margin-top:4px;">
+            ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
+          </div>
+
+          ${
+            s.location
+              ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>`
+              : ""
+          }
+
+          <div style="margin-top:8px; font-size:13px; opacity:.92;">
             <b>Assigned:</b> ${assignedCount}
           </div>
 
-          ${assignedCount ? `
-            <div class="wl-chips">
-              ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
-              ${assignedCount > 2 ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>` : ""}
-            </div>
-          ` : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`}
+          ${
+            assignedCount
+              ? `
+                <div class="wl-chips" style="margin-top:6px;">
+                  ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
+                  ${
+                    assignedCount > 2
+                      ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>`
+                      : ""
+                  }
+                </div>
+              `
+              : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`
+          }
         </div>
 
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
@@ -133,12 +154,14 @@ function renderShiftCard(s, assignedIds, labelMap) {
 
 function renderStatusBadge(statusRaw) {
   const status = String(statusRaw || "ACTIVE").toUpperCase();
+
   const map = {
     ACTIVE: { cls: "wl-badge--active", label: "Active" },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
     DRAFT: { cls: "wl-badge--draft", label: "Draft" },
     OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
+
   const s = map[status] || { cls: "", label: status };
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
