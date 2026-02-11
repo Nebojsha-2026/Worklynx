@@ -190,12 +190,12 @@ try {
         ${
           totals
             ? `<div class="wl-alert wl-alert--success">
-                 <div><b>Total worked:</b> ${escapeHtml(totals.workedLabel)}</div>
-                 ${
-                   totals.payLabel
-                     ? `<div style="margin-top:6px;"><b>Estimated pay:</b> ${escapeHtml(totals.payLabel)}</div>`
-                     : ""
-                 }
+                 <div style="font-size:13px; opacity:.85; margin-top:6px;">
+  ${breakIsPaid ? "Pay includes break minutes." : "Pay excludes unpaid break minutes."}
+  <br/>
+  Pay calculated from: <b>${escapeHtml(totals.paidRoundedLabel)}</b>
+</div>
+
                  <div style="font-size:13px; opacity:.85; margin-top:6px;">
                    ${breakIsPaid ? "Includes break minutes." : "Excludes unpaid break minutes."}
                  </div>
@@ -424,20 +424,57 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
   const end = new Date(clockOut).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
 
-  const totalMins = Math.floor((end - start) / 60000);
-  let paidMins = totalMins;
+  // 1) Always compute TOTAL worked time from timestamps (round to nearest minute, min 1 if any time passed)
+  const diffMs = end - start;
+  const totalWorkedMins = Math.max(1, Math.round(diffMs / 60000));
 
-  if (!breakIsPaid) paidMins = Math.max(0, totalMins - Number(breakMinutes || 0));
+  // 2) Compute payable minutes (raw) based on paid/unpaid break
+  const b = Math.max(0, Number(breakMinutes || 0));
+  const paidMinsRaw = breakIsPaid ? totalWorkedMins : Math.max(0, totalWorkedMins - b);
 
-  const workedLabel = `${Math.floor(paidMins / 60)}h ${paidMins % 60}m`;
+  // 3) Apply pay rounding rules:
+  //    0–19 -> 0
+  //    20–44 -> 30
+  //    45–74 -> 60
+  //    75–104 -> 90
+  //    and so on in 30-min blocks
+  function roundForPay(mins) {
+    if (!mins || mins <= 0) return 0;
+    if (mins <= 19) return 0;
+
+    // Work in 60-minute chunks + remainder
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+
+    let roundedRem = 0;
+    if (rem <= 19) roundedRem = 0;
+    else if (rem <= 44) roundedRem = 30;
+    else roundedRem = 60;
+
+    return (hours * 60) + roundedRem;
+  }
+
+  const paidMinsRounded = roundForPay(paidMinsRaw);
+
+  // Labels
+  const workedLabel = `${Math.floor(totalWorkedMins / 60)}h ${totalWorkedMins % 60}m`;
 
   let payLabel = "";
   if (Number.isFinite(hourlyRate) && hourlyRate != null) {
-    const pay = (paidMins / 60) * hourlyRate;
+    const pay = (paidMinsRounded / 60) * hourlyRate;
     payLabel = `$${pay.toFixed(2)}`;
   }
 
-  return { workedLabel, payLabel };
+  // Extra info (optional but helpful)
+  const paidLabel = `${Math.floor(paidMinsRaw / 60)}h ${paidMinsRaw % 60}m`;
+  const paidRoundedLabel = `${Math.floor(paidMinsRounded / 60)}h ${paidMinsRounded % 60}m`;
+
+  return {
+    workedLabel,          // always real elapsed minutes
+    payLabel,             // based on rounding
+    paidLabel,            // raw payable minutes (after break)
+    paidRoundedLabel,     // payable minutes after rounding
+  };
 }
 
 function renderStatusBadge(status) {
