@@ -3,51 +3,44 @@ import { getSupabase } from "../core/supabaseClient.js";
 import { getSession } from "../core/session.js";
 
 /**
- * Finds an existing timesheet for (shiftId + current employee).
- * If not found, creates it.
- *
- * IMPORTANT: This assumes your `timesheets` table has:
- * - id (uuid)
- * - shift_id (uuid)
- * - employee_user_id (uuid)
- * - organization_id (uuid)  (optional but common)
- *
- * If your column names differ, you’ll get a “column does not exist” error.
+ * Find or create the timesheet for the current logged-in employee + shift.
+ * Uses unique constraint: (shift_id, employee_user_id)
  */
 export async function getOrCreateTimesheetForShift({ shiftId, organizationId }) {
   const supabase = getSupabase();
   const session = await getSession();
   const userId = session?.user?.id;
+
   if (!userId) throw new Error("Not authenticated.");
   if (!shiftId) throw new Error("Missing shiftId.");
+  if (!organizationId) throw new Error("Missing organizationId.");
 
-  // 1) Try find existing
-  let q = supabase
+  // 1) Try to find existing timesheet
+  const { data: existing, error: findErr } = await supabase
     .from("timesheets")
-    .select("id")
+    .select("id, status, submitted_at, created_at")
+    .eq("organization_id", organizationId)
     .eq("shift_id", shiftId)
     .eq("employee_user_id", userId)
-    .limit(1);
+    .maybeSingle();
 
-  if (organizationId) q = q.eq("organization_id", organizationId);
-
-  const { data: existing, error: findErr } = await q.maybeSingle();
   if (findErr) throw findErr;
-  if (existing?.id) return existing.id;
+  if (existing?.id) return existing; // return whole row (useful later)
 
-  // 2) Create new
-  const insertPayload = {
+  // 2) Create new timesheet
+  const payload = {
+    organization_id: organizationId,
     shift_id: shiftId,
     employee_user_id: userId,
+    // status defaults to OPEN in DB
   };
-  if (organizationId) insertPayload.organization_id = organizationId;
 
   const { data: created, error: insErr } = await supabase
     .from("timesheets")
-    .insert(insertPayload)
-    .select("id")
+    .insert(payload)
+    .select("id, status, submitted_at, created_at")
     .single();
 
   if (insErr) throw insErr;
-  return created.id;
+  return created;
 }
