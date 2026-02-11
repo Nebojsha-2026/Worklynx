@@ -45,7 +45,6 @@ content.innerHTML = `
     </div>
 
     <div id="shiftList" style="margin-top:12px;"></div>
-
     <div id="shiftControls" style="margin-top:12px; display:none;"></div>
   </section>
 `;
@@ -65,22 +64,22 @@ async function loadUpcoming() {
   try {
     const all = await listShifts({ organizationId: org.id, limit: 200 });
 
-    // Only show ACTIVE + OFFERED in "Upcoming"
+    // Upcoming: only Active-ish statuses
     const allowed = new Set(["PUBLISHED", "ACTIVE", "OFFERED"]);
     const visible = (all || []).filter((s) =>
-      allowed.has(String(s.status || "ACTIVE").toUpperCase())
+      allowed.has(String(s.status || "").toUpperCase())
     );
 
     if (!visible.length) {
       listEl.innerHTML = `
-        <div class="wl-alert" style="opacity:.95;">
+        <div style="opacity:.85;">
           No upcoming shifts (Active/Offered). Create one!
         </div>
       `;
       return;
     }
 
-    // Sort by date then start time
+    // Sort by date then start time (start_at is TIME)
     visible.sort((a, b) => {
       const ad = String(a.shift_date || "");
       const bd = String(b.shift_date || "");
@@ -88,8 +87,12 @@ async function loadUpcoming() {
       return String(a.start_at || "").localeCompare(String(b.start_at || ""));
     });
 
-    // Load employee labels (EMPLOYEE only)
-    const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+    // Load EMPLOYEE labels (user_id -> label)
+    const members = await listOrgMembers({
+      organizationId: org.id,
+      roles: ["EMPLOYEE"],
+    });
+
     const employeeLabelById = new Map(
       (members || []).map((m) => [
         m.user_id,
@@ -97,7 +100,7 @@ async function loadUpcoming() {
       ])
     );
 
-    // Load assignments for these shifts (for counts + chips)
+    // Load assignments for these visible shifts
     const shiftIds = visible.map((s) => s.id);
     const assigns = await listAssignmentsForShifts({ shiftIds });
 
@@ -109,13 +112,11 @@ async function loadUpcoming() {
       assignedByShift.set(sid, arr);
     }
 
-    // Pagination rules
+    // Controls: show 4 by default, toggle to 10
     const DEFAULT_LIMIT = 4;
     const EXPANDED_LIMIT = 10;
 
-    const state = {
-      expanded: false,
-    };
+    const state = { expanded: false };
 
     function render() {
       const limit = state.expanded ? EXPANDED_LIMIT : DEFAULT_LIMIT;
@@ -125,13 +126,16 @@ async function loadUpcoming() {
         <div style="display:grid; gap:10px;">
           ${slice
             .map((s) =>
-              renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById)
+              renderShiftCard(
+                s,
+                assignedByShift.get(s.id) || [],
+                employeeLabelById
+              )
             )
             .join("")}
         </div>
       `;
 
-      // Controls
       const canExpand = visible.length > DEFAULT_LIMIT;
       const hasMoreThan10 = visible.length > EXPANDED_LIMIT;
 
@@ -159,7 +163,9 @@ async function loadUpcoming() {
             canExpand
               ? `
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; opacity:.9;">
-              <input id="toggleMore" type="checkbox" ${state.expanded ? "checked" : ""} />
+              <input id="toggleMore" type="checkbox" ${
+                state.expanded ? "checked" : ""
+              } />
               Show up to ${EXPANDED_LIMIT}
             </label>
           `
@@ -168,7 +174,9 @@ async function loadUpcoming() {
 
           ${
             hasMoreThan10
-              ? `<a class="wl-btn" href="${path("/app/manager/shifts.html")}">View all →</a>`
+              ? `<a class="wl-btn" href="${path(
+                  "/app/manager/shifts.html"
+                )}">View all →</a>`
               : ""
           }
         </div>
@@ -218,8 +226,14 @@ function renderShiftCard(s, assignedIds, labelMap) {
             assignedCount
               ? `
             <div class="wl-chips" style="margin-top:6px;">
-              ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
-              ${assignedCount > 2 ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>` : ""}
+              ${top2
+                .map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`)
+                .join("")}
+              ${
+                assignedCount > 2
+                  ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>`
+                  : ""
+              }
             </div>
           `
               : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`
@@ -236,15 +250,15 @@ function renderShiftCard(s, assignedIds, labelMap) {
 }
 
 function renderStatusBadge(statusRaw) {
-  const status = String(statusRaw || "ACTIVE").toUpperCase();
+  const status = String(statusRaw || "PUBLISHED").toUpperCase();
   const map = {
-  PUBLISHED: { cls: "wl-badge--active", label: "Active" },
-  ACTIVE: { cls: "wl-badge--active", label: "Active" },
-  CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-  DRAFT: { cls: "wl-badge--draft", label: "Draft" },
-  OFFERED: { cls: "wl-badge--offered", label: "Offered" },
+    PUBLISHED: { cls: "wl-badge--active", label: "Active" },
+    ACTIVE: { cls: "wl-badge--active", label: "Active" },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
+    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
-  
+
   const s = map[status] || { cls: "", label: status };
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
