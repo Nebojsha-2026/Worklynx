@@ -44,7 +44,7 @@ main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 main.querySelector("#wlContent").innerHTML = `
   <h1>Create shift</h1>
 
-    <section class="wl-card wl-panel">
+  <section class="wl-card wl-panel">
     <form id="shiftForm" class="wl-form">
 
       <label>Title</label>
@@ -70,6 +70,15 @@ main.querySelector("#wlContent").innerHTML = `
         </div>
       </div>
 
+      <!-- NEW: break paid/unpaid -->
+      <label style="display:flex; align-items:center; gap:10px; margin-top:2px;">
+        <input id="breakIsPaid" type="checkbox" />
+        Break is paid
+      </label>
+      <div style="font-size:13px; opacity:.8; margin-top:-6px;">
+        If unchecked, break minutes will be subtracted from total worked time.
+      </div>
+
       <button class="wl-btn" type="submit">Create shift</button>
     </form>
 
@@ -90,6 +99,9 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   const rateRaw = document.querySelector("#rate").value;
   const startAt = document.querySelector("#startAt").value;
   const endAt = document.querySelector("#endAt").value;
+
+  // NEW
+  const breakIsPaid = !!document.querySelector("#breakIsPaid").checked;
 
   // Validation
   const hourlyRate = Number(rateRaw);
@@ -142,6 +154,9 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     shift_date: start.date,
     start_at: start.time,
     end_at: end.time,
+
+    // NEW
+    break_is_paid: breakIsPaid,
   };
 
   try {
@@ -150,7 +165,6 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
 
     const shift = await createShift(payload);
 
-    // IMPORTANT: start_at/end_at are TIME values, not full timestamps
     resultEl.innerHTML = `
       <div class="wl-card" style="padding:12px;">
         <strong>Shift created</strong><br/>
@@ -158,6 +172,9 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
           <div><b>${shift.title}</b></div>
           <div style="font-size:13px; opacity:.85;">
             ${shift.shift_date} • ${shift.start_at} → ${shift.end_at}
+          </div>
+          <div style="font-size:13px; opacity:.85; margin-top:6px;">
+            Break is <b>${shift.break_is_paid ? "paid" : "unpaid"}</b>
           </div>
         </div>
       </div>
