@@ -6,22 +6,19 @@ import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { createShift } from "../../data/shifts.api.js";
 
-// Only BO/BM/MANAGER can create shifts (you can tighten later)
+// Only BO/BM/MANAGER can create shifts
 await requireRole(["BO", "BM", "MANAGER"]);
 
 const org = await loadOrgContext();
 
-// Helpers
 function splitDateTime(dtLocal) {
-  // dtLocal from <input type="datetime-local"> format: YYYY-MM-DDTHH:MM
   const [d, t] = String(dtLocal).split("T");
   return {
     date: d,
-    time: t && t.length === 5 ? `${t}:00` : t, // ensure HH:MM:SS
+    time: t && t.length === 5 ? `${t}:00` : t,
   };
 }
 
-// Header + footer
 document.body.prepend(
   renderHeader({
     companyName: org.name,
@@ -30,7 +27,6 @@ document.body.prepend(
 );
 document.body.append(renderFooter({ version: "v0.1.0" }));
 
-// Shell
 const main = document.querySelector("main");
 main.innerHTML = `
   <div class="wl-shell">
@@ -70,13 +66,34 @@ main.querySelector("#wlContent").innerHTML = `
         </div>
       </div>
 
-      <!-- NEW: break paid/unpaid -->
-      <label style="display:flex; align-items:center; gap:10px; margin-top:2px;">
-        <input id="breakIsPaid" type="checkbox" />
-        Break is paid
-      </label>
-      <div style="font-size:13px; opacity:.8; margin-top:-6px;">
-        If unchecked, break minutes will be subtracted from total worked time.
+      <!-- NEW: Break options (optional) -->
+      <div class="wl-card wl-panel" style="padding:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div style="font-weight:800;">Break (optional)</div>
+          <label style="display:flex; align-items:center; gap:10px; font-size:13px; opacity:.9;">
+            <input id="hasBreak" type="checkbox" />
+            Has break
+          </label>
+        </div>
+
+        <div id="breakFields" style="display:none; margin-top:10px;">
+          <div class="wl-form__row">
+            <div>
+              <label>Break minutes</label>
+              <input id="breakMinutes" type="number" min="0" step="1" placeholder="e.g. 30" />
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+              <label style="display:flex; align-items:center; gap:10px; margin:0;">
+                <input id="breakIsPaid" type="checkbox" />
+                Break is paid
+              </label>
+            </div>
+          </div>
+
+          <div style="font-size:13px; opacity:.8; margin-top:6px;">
+            If unpaid, break minutes are subtracted from paid time.
+          </div>
+        </div>
       </div>
 
       <button class="wl-btn" type="submit">Create shift</button>
@@ -86,7 +103,26 @@ main.querySelector("#wlContent").innerHTML = `
   </section>
 `;
 
-// Submit
+const hasBreakEl = document.querySelector("#hasBreak");
+const breakFieldsEl = document.querySelector("#breakFields");
+const breakMinutesEl = document.querySelector("#breakMinutes");
+const breakIsPaidEl = document.querySelector("#breakIsPaid");
+
+// default: no break
+hasBreakEl.checked = false;
+breakFieldsEl.style.display = "none";
+breakMinutesEl.value = "";
+breakIsPaidEl.checked = false;
+
+hasBreakEl.addEventListener("change", () => {
+  const on = !!hasBreakEl.checked;
+  breakFieldsEl.style.display = on ? "block" : "none";
+  if (!on) {
+    breakMinutesEl.value = "";
+    breakIsPaidEl.checked = false;
+  }
+});
+
 document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -100,10 +136,6 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   const startAt = document.querySelector("#startAt").value;
   const endAt = document.querySelector("#endAt").value;
 
-  // NEW
-  const breakIsPaid = !!document.querySelector("#breakIsPaid").checked;
-
-  // Validation
   const hourlyRate = Number(rateRaw);
 
   if (!title) {
@@ -126,13 +158,11 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   const start = splitDateTime(startAt);
   const end = splitDateTime(endAt);
 
-  // For now we require same date (simple shift model)
   if (start.date !== end.date) {
     resultEl.innerHTML = `<div style="color:#ffb3b3;">Start and end must be on the same date (for now).</div>`;
     return;
   }
 
-  // Compare start/end
   const startMs = new Date(`${start.date}T${start.time}`).getTime();
   const endMs = new Date(`${end.date}T${end.time}`).getTime();
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
@@ -144,7 +174,23 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     return;
   }
 
-  // Payload matches your DB schema (shift_date + time columns)
+  // Break payload (optional)
+  let break_minutes = 0;
+  let break_is_paid = false;
+
+  if (hasBreakEl.checked) {
+    const mins = Number(breakMinutesEl.value);
+    if (!Number.isFinite(mins) || mins < 0) {
+      resultEl.innerHTML = `<div style="color:#ffb3b3;">Break minutes must be 0 or more.</div>`;
+      return;
+    }
+    break_minutes = Math.round(mins);
+    break_is_paid = !!breakIsPaidEl.checked;
+
+    // If minutes is 0, paid/unpaid is irrelevant; normalize to false.
+    if (break_minutes === 0) break_is_paid = false;
+  }
+
   const payload = {
     organization_id: org.id,
     title,
@@ -155,8 +201,11 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     start_at: start.time,
     end_at: end.time,
 
-    // NEW
-    break_is_paid: breakIsPaid,
+    // Your schema already has break_minutes; keep it always present.
+    break_minutes,
+
+    // Optional flag; safe even when break_minutes = 0
+    break_is_paid,
   };
 
   try {
@@ -164,6 +213,11 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     btn.disabled = true;
 
     const shift = await createShift(payload);
+
+    const breakSummary =
+      (shift.break_minutes || 0) > 0
+        ? `${shift.break_minutes} min (${shift.break_is_paid ? "paid" : "unpaid"})`
+        : "No break";
 
     resultEl.innerHTML = `
       <div class="wl-card" style="padding:12px;">
@@ -174,13 +228,18 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
             ${shift.shift_date} • ${shift.start_at} → ${shift.end_at}
           </div>
           <div style="font-size:13px; opacity:.85; margin-top:6px;">
-            Break is <b>${shift.break_is_paid ? "paid" : "unpaid"}</b>
+            Break: <b>${breakSummary}</b>
           </div>
         </div>
       </div>
     `;
 
     e.target.reset();
+    // restore defaults
+    hasBreakEl.checked = false;
+    breakFieldsEl.style.display = "none";
+    breakMinutesEl.value = "";
+    breakIsPaidEl.checked = false;
   } catch (err) {
     console.error(err);
     resultEl.innerHTML = `<div style="color:#ffb3b3;">${err.message || "Failed to create shift."}</div>`;
