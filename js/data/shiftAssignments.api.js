@@ -1,18 +1,27 @@
 // js/data/shiftAssignments.api.js
 import { getSupabase } from "../core/supabaseClient.js";
-import { getSession } from "../core/session.js";
 
-export async function listMyShiftAssignments() {
+export async function listAssignmentsForShifts({ shiftIds = [] }) {
   const supabase = getSupabase();
-  const session = await getSession();
-  const userId = session?.user?.id;
-
-  if (!userId) throw new Error("Not authenticated.");
+  if (!shiftIds.length) return [];
 
   const { data, error } = await supabase
     .from("shift_assignments")
-    .select("shift_id, assigned_at")
-    .eq("employee_user_id", userId);
+    .select("shift_id, employee_user_id")
+    .in("shift_id", shiftIds);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listAssignmentsForShift({ shiftId }) {
+  const supabase = getSupabase();
+  if (!shiftId) return [];
+
+  const { data, error } = await supabase
+    .from("shift_assignments")
+    .select("shift_id, employee_user_id")
+    .eq("shift_id", shiftId);
 
   if (error) throw error;
   return data || [];
