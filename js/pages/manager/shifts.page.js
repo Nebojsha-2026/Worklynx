@@ -5,6 +5,8 @@ import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { listShifts } from "../../data/shifts.api.js";
+import { listAssignmentsForShifts } from "../../data/shiftAssignments.api.js";
+import { listOrgMembers } from "../../data/members.api.js";
 import { path } from "../../core/config.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
@@ -36,61 +38,57 @@ content.innerHTML = `
     <a class="wl-btn" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
   </div>
 
-  <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-    <label style="display:flex; gap:8px; align-items:center; font-size:13px; opacity:.9;">
-      <input id="showCancelled" type="checkbox" />
-      Show cancelled
-    </label>
-  </div>
-
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div id="shiftsList" style="display:grid; gap:10px;"></div>
   </section>
 `;
 
 const listEl = document.querySelector("#shiftsList");
-const showCancelledEl = document.querySelector("#showCancelled");
-
-let allShifts = [];
-
-async function load() {
-  listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
-  allShifts = await listShifts({ organizationId: org.id, limit: 50 });
-  render();
-}
-
-function render() {
-  const showCancelled = showCancelledEl.checked;
-
-  const filtered = allShifts.filter(s => {
-    const st = String(s.status || "ACTIVE").toUpperCase();
-    if (showCancelled) return true;
-    return st !== "CANCELLED";
-  });
-
-  if (!filtered.length) {
-    listEl.innerHTML = `
-      <div class="wl-alert" style="opacity:.95;">
-        No shifts to show.
-      </div>
-    `;
-    return;
-  }
-
-  filtered.sort((a, b) => {
-    const ad = String(a.shift_date || "");
-    const bd = String(b.shift_date || "");
-    if (ad !== bd) return ad.localeCompare(bd);
-    return String(a.start_at || "").localeCompare(String(b.start_at || ""));
-  });
-
-  listEl.innerHTML = filtered.map(renderShiftRow).join("");
-}
-
-showCancelledEl.addEventListener("change", render);
 
 try {
-  await load();
+  listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
+
+  const shifts = await listShifts({ organizationId: org.id, limit: 50 });
+
+  if (!shifts.length) {
+    listEl.innerHTML = `
+      <div class="wl-alert" style="opacity:.95;">
+        No shifts yet. Click <b>Create shift</b> to add one.
+      </div>
+    `;
+  } else {
+    // Sort by date then start time (since start_at is TIME)
+    shifts.sort((a, b) => {
+      const ad = String(a.shift_date || "");
+      const bd = String(b.shift_date || "");
+      if (ad !== bd) return ad.localeCompare(bd);
+      return String(a.start_at || "").localeCompare(String(b.start_at || ""));
+    });
+
+    // Employees map
+    const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+    const employeeLabelById = new Map(
+      (members || []).map((m) => [
+        m.user_id,
+        (m.full_name || m.email || m.user_id || "").toString(),
+      ])
+    );
+
+    // Assignments grouped
+    const shiftIds = shifts.map((s) => s.id);
+    const assigns = await listAssignmentsForShifts({ shiftIds });
+
+    const assignedByShift = new Map();
+    for (const a of assigns) {
+      const arr = assignedByShift.get(a.shift_id) || [];
+      arr.push(a.employee_user_id);
+      assignedByShift.set(a.shift_id, arr);
+    }
+
+    listEl.innerHTML = shifts
+      .map((s) => renderShiftRow(s, assignedByShift.get(s.id) || [], employeeLabelById))
+      .join("");
+  }
 } catch (err) {
   console.error(err);
   listEl.innerHTML = `
@@ -100,8 +98,10 @@ try {
   `;
 }
 
-function renderShiftRow(s) {
+function renderShiftRow(s, assignedIds, labelMap) {
   const href = path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`);
+  const assignedCount = assignedIds.length;
+  const top2 = assignedIds.slice(0, 2).map((id) => labelMap.get(id) || id);
 
   return `
     <a class="wl-card wl-panel" href="${href}" style="display:block;">
@@ -112,7 +112,19 @@ function renderShiftRow(s) {
             ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
             ${s.location ? ` • ${escapeHtml(s.location)}` : ""}
           </div>
+
+          <div style="margin-top:8px; font-size:13px; opacity:.9;">
+            <b>Assigned:</b> ${assignedCount}
+          </div>
+
+          ${assignedCount ? `
+            <div class="wl-chips">
+              ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
+              ${assignedCount > 2 ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>` : ""}
+            </div>
+          ` : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`}
         </div>
+
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
           ${renderStatusBadge(s.status)}
           <div style="opacity:.8; font-size:13px;">View →</div>
@@ -124,14 +136,12 @@ function renderShiftRow(s) {
 
 function renderStatusBadge(statusRaw) {
   const status = String(statusRaw || "ACTIVE").toUpperCase();
-
   const map = {
     ACTIVE: { cls: "wl-badge--active", label: "Active" },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
     DRAFT: { cls: "wl-badge--draft", label: "Draft" },
     OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
-
   const s = map[status] || { cls: "", label: status };
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
