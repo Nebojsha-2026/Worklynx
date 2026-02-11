@@ -127,9 +127,13 @@ content.innerHTML = `
     }
   </section>
 
-  <div style="margin-top:14px;">
-    <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">← Back to My shifts</a>
-  </div>
+  <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+  <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">← Back to My shifts</a>
+
+  <a class="wl-btn" href="${path(`/app/employee/timesheet-new.html?shiftId=${encodeURIComponent(shiftId)}`)}">
+    + Create timesheet entry
+  </a>
+</div>
 `;
 
 /* --------------------------
