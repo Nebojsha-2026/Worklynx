@@ -5,6 +5,8 @@ import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { listShifts } from "../../data/shifts.api.js";
+import { listAssignmentsForShifts } from "../../data/shiftAssignments.api.js";
+import { listOrgMembers } from "../../data/members.api.js";
 import { path } from "../../core/config.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
@@ -45,6 +47,10 @@ content.innerHTML = `
   </section>
 `;
 
+document.querySelector("#refreshBtn").addEventListener("click", loadUpcoming);
+
+await loadUpcoming();
+
 async function loadUpcoming() {
   const listEl = document.querySelector("#shiftList");
   listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
@@ -57,54 +63,84 @@ async function loadUpcoming() {
       return;
     }
 
-    // optional: sort by date + start
-    shifts.sort((a, b) => {
-      const ad = String(a.shift_date || "");
-      const bd = String(b.shift_date || "");
-      if (ad !== bd) return ad.localeCompare(bd);
-      return String(a.start_at || "").localeCompare(String(b.start_at || ""));
-    });
+    // Employees map (user_id -> label)
+    const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
+    const employeeLabelById = new Map(
+      (members || []).map((m) => [
+        m.user_id,
+        (m.full_name || m.email || m.user_id || "").toString(),
+      ])
+    );
+
+    // Assignments grouped by shift
+    const shiftIds = shifts.map((s) => s.id);
+    const assigns = await listAssignmentsForShifts({ shiftIds });
+
+    const assignedByShift = new Map(); // shiftId -> [employee_user_id]
+    for (const a of assigns) {
+      const arr = assignedByShift.get(a.shift_id) || [];
+      arr.push(a.employee_user_id);
+      assignedByShift.set(a.shift_id, arr);
+    }
 
     listEl.innerHTML = `
       <div style="display:grid; gap:10px;">
-        ${shifts
-          .map(
-            (s) => `
-          <a class="wl-card wl-panel"
-             href="${path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`)}"
-             style="display:block; padding:12px;">
-            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
-              <div>
-                <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
-                <div style="font-size:13px; opacity:.85; margin-top:4px;">
-                  ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
-                </div>
-                ${
-                  s.location
-                    ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(
-                        s.location
-                      )}</div>`
-                    : ""
-                }
-              </div>
-
-              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-                ${renderStatusBadge(s.status)}
-                <div style="font-size:13px; opacity:.8;">View →</div>
-              </div>
-            </div>
-          </a>
-        `
-          )
-          .join("")}
+        ${shifts.map((s) => renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById)).join("")}
       </div>
     `;
   } catch (err) {
     console.error(err);
-    listEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts: ${escapeHtml(
-      err.message || "Unknown error"
-    )}</div>`;
+    listEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts: ${escapeHtml(err.message || "Unknown error")}</div>`;
   }
+}
+
+function renderShiftCard(s, assignedIds, labelMap) {
+  const href = path(`/app/manager/shift.html?id=${encodeURIComponent(s.id)}`);
+
+  const assignedCount = assignedIds.length;
+  const top2 = assignedIds.slice(0, 2).map((id) => labelMap.get(id) || id);
+
+  return `
+    <a class="wl-card wl-panel" href="${href}" style="display:block; padding:12px;">
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+        <div>
+          <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+          <div style="font-size:13px; opacity:.85; margin-top:4px;">
+            ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
+          </div>
+          ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
+
+          <div style="margin-top:8px; font-size:13px; opacity:.9;">
+            <b>Assigned:</b> ${assignedCount}
+          </div>
+
+          ${assignedCount ? `
+            <div class="wl-chips">
+              ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
+              ${assignedCount > 2 ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>` : ""}
+            </div>
+          ` : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`}
+        </div>
+
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+          ${renderStatusBadge(s.status)}
+          <div style="font-size:13px; opacity:.8;">View →</div>
+        </div>
+      </div>
+    </a>
+  `;
+}
+
+function renderStatusBadge(statusRaw) {
+  const status = String(statusRaw || "ACTIVE").toUpperCase();
+  const map = {
+    ACTIVE: { cls: "wl-badge--active", label: "Active" },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
+    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
+  };
+  const s = map[status] || { cls: "", label: status };
+  return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
 
 function escapeHtml(str) {
@@ -115,20 +151,3 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-
-function renderStatusBadge(statusRaw) {
-  const status = String(statusRaw || "ACTIVE").toUpperCase();
-
-  const map = {
-    ACTIVE: { cls: "wl-badge--active", label: "Active" },
-    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
-    OFFERED: { cls: "wl-badge--offered", label: "Offered" },
-  };
-
-  const s = map[status] || { cls: "", label: status };
-  return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
-}
-
-document.querySelector("#refreshBtn").addEventListener("click", loadUpcoming);
-await loadUpcoming();
