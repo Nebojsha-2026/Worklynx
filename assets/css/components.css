@@ -74,7 +74,8 @@
 }
 
 /* Card section spacing (so it doesn't feel like a giant slab) */
-.wl-card.wl-panel{
+/* Card section spacing (so it doesn't feel like a giant slab) */
+.wl-panel{
   padding: 18px;
 }
 
@@ -158,8 +159,8 @@
 }
 /* Employee polish */
 .wl-card.is-cancelled {
-  opacity: 0.6;
-  filter: grayscale(0.25);
+  opacity: 0.75;
+  filter: grayscale(0.2);
 }
 
 /* Employee shift filter pills */
