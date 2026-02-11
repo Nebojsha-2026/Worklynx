@@ -139,6 +139,7 @@
   border: 1px solid var(--wl-border);
   background: rgba(255,255,255,0.06);
   font-size: 12px;
+  line-height: 1;
   opacity: .95;
 }
 .wl-chip small{
