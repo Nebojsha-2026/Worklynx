@@ -67,10 +67,8 @@ async function loadUpcoming() {
 
     // Only show ACTIVE + OFFERED in "Upcoming"
     const allowed = new Set(["PUBLISHED", "ACTIVE", "OFFERED"]);
-    const visibleShifts = shifts
-  .filter(s => allowed.has(String(s.status).toUpperCase()))
-  .slice(0, 4);
-    <a href="/app/manager/shifts.html">View all shifts →</a>
+    const visible = (all || []).filter((s) =>
+      allowed.has(String(s.status || "ACTIVE").toUpperCase())
     );
 
     if (!visible.length) {
