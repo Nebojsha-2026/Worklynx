@@ -65,6 +65,9 @@ if (error || !shift) {
 const status = String(shift.status || "PUBLISHED").toUpperCase();
 const isCancelled = status === "CANCELLED";
 
+// NEW: break policy
+const breakIsPaid = !!shift.break_is_paid;
+
 const whenLabel = formatWhenLabel(shift.shift_date);
 const statusBadge = renderStatusBadge(status);
 
@@ -113,6 +116,12 @@ content.innerHTML = `
           ? `<div><b>Rate:</b> ${escapeHtml(String(shift.hourly_rate))} / hr</div>`
           : ""
       }
+      <div>
+        <b>Break policy:</b> ${breakIsPaid ? "Paid" : "Unpaid"}
+        <div style="font-size:13px; opacity:.8; margin-top:4px;">
+          ${breakIsPaid ? "Break minutes are included in paid time." : "Break minutes are subtracted from worked time."}
+        </div>
+      </div>
       ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
       ${
         shift.description
@@ -157,17 +166,24 @@ try {
     organizationId: org.id,
   });
 
+  // Open entry (clock_out is null)
   let openEntry = await getOpenTimeEntry({ timesheetId: timesheet.id });
 
-  renderTimesheetUI({ timesheet, openEntry, isCancelled });
+  // NEW: also fetch latest entry (so after clock-out we can still calculate totals)
+  let latestEntry = await getLatestTimeEntry({ timesheetId: timesheet.id });
+
+  renderTimesheetUI({ timesheet, openEntry, latestEntry, isCancelled });
 
   async function refresh() {
     tsMsgEl.innerHTML = "";
     openEntry = await getOpenTimeEntry({ timesheetId: timesheet.id });
-    renderTimesheetUI({ timesheet, openEntry, isCancelled });
+    latestEntry = await getLatestTimeEntry({ timesheetId: timesheet.id });
+    renderTimesheetUI({ timesheet, openEntry, latestEntry, isCancelled });
   }
 
-  function renderTimesheetUI({ timesheet, openEntry, isCancelled }) {
+  function renderTimesheetUI({ timesheet, openEntry, latestEntry, isCancelled }) {
+    const effectiveEntry = openEntry || latestEntry || null;
+
     tsStateEl.textContent = openEntry ? "Clocked in" : "Ready";
     tsStateEl.className = `wl-badge ${
       openEntry ? "wl-badge--active" : "wl-badge--draft"
@@ -177,23 +193,45 @@ try {
       ? new Date(openEntry.clock_in).toLocaleString()
       : null;
 
-    const breakMins = Number(openEntry?.break_minutes || 0);
+    const breakMins = Number(effectiveEntry?.break_minutes || 0);
 
+    // Break state (only meaningful if we have an open entry)
     const breakKey = openEntry ? `wl_break_${openEntry.id}` : null;
-    const breakState = breakKey
-      ? safeJsonParse(localStorage.getItem(breakKey))
-      : null;
+    const breakState = breakKey ? safeJsonParse(localStorage.getItem(breakKey)) : null;
     const isOnBreak = !!(breakState && breakState.startedAt);
 
     const breakStartedLabel = isOnBreak
       ? new Date(breakState.startedAt).toLocaleTimeString()
       : null;
 
+    // NEW: worked time calculation (only if we have a completed entry)
+    const workedLabel = calcWorkedLabel({
+      clockIn: effectiveEntry?.clock_in,
+      clockOut: effectiveEntry?.clock_out,
+      breakMinutes: breakMins,
+      breakIsPaid,
+    });
+
     tsBodyEl.innerHTML = `
       <div style="display:grid; gap:10px;">
         <div style="opacity:.9;">
           <b>Timesheet status:</b> ${escapeHtml(String(timesheet.status || "OPEN"))}
         </div>
+
+        <div style="font-size:13px; opacity:.9;">
+          <b>Break policy:</b> ${breakIsPaid ? "Paid" : "Unpaid"}
+        </div>
+
+        ${
+          workedLabel
+            ? `<div class="wl-alert wl-alert--success">
+                 <b>Total worked:</b> ${escapeHtml(workedLabel)}
+                 <div style="font-size:13px; opacity:.85; margin-top:4px;">
+                   ${breakIsPaid ? "Includes break minutes." : "Excludes break minutes."}
+                 </div>
+               </div>`
+            : ""
+        }
 
         ${
           openEntry
@@ -202,7 +240,17 @@ try {
                  <span style="opacity:.85; font-size:13px;">Started: ${escapeHtml(clockedInAt)}</span><br/>
                  <span style="opacity:.85; font-size:13px;">Break minutes: <b>${breakMins}</b></span>
                </div>`
-            : `<div style="opacity:.9;">You are not clocked in.</div>`
+            : `<div style="opacity:.9;">
+                 You are not clocked in.
+                 ${
+                   effectiveEntry?.clock_out
+                     ? `<div style="font-size:13px; opacity:.85; margin-top:6px;">
+                          Last entry: ${escapeHtml(new Date(effectiveEntry.clock_in).toLocaleString())}
+                          → ${escapeHtml(new Date(effectiveEntry.clock_out).toLocaleString())}
+                        </div>`
+                     : ""
+                 }
+               </div>`
         }
 
         ${
@@ -237,9 +285,7 @@ try {
                   : `<button id="breakStartBtn" class="wl-btn" type="button">Start break</button>`
               }
 
-              <button id="breakAddBtn" class="wl-btn" type="button" ${
-                isOnBreak ? "disabled" : ""
-              }>
+              <button id="breakAddBtn" class="wl-btn" type="button" ${isOnBreak ? "disabled" : ""}>
                 Add minutes
               </button>
             </div>
@@ -253,14 +299,10 @@ try {
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           ${
             openEntry
-              ? `<button id="clockOutBtn" class="wl-btn" type="button" ${
-                  isOnBreak ? "disabled" : ""
-                }>
+              ? `<button id="clockOutBtn" class="wl-btn" type="button" ${isOnBreak ? "disabled" : ""}>
                    Clock out
                  </button>`
-              : `<button id="clockInBtn" class="wl-btn" type="button" ${
-                  isCancelled ? "disabled" : ""
-                }>
+              : `<button id="clockInBtn" class="wl-btn" type="button" ${isCancelled ? "disabled" : ""}>
                    Clock in
                  </button>`
           }
@@ -318,7 +360,9 @@ try {
           if (!latest) throw new Error("No open time entry found.");
           await clockOut({ timeEntryId: latest.id });
 
-          if (breakKey) localStorage.removeItem(breakKey);
+          // Clear break state on clock-out (so refresh doesn't think you're still on break)
+          const key = `wl_break_${latest.id}`;
+          localStorage.removeItem(key);
 
           tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--success">Clocked out ✅</div>`;
           await refresh();
@@ -389,7 +433,7 @@ try {
       });
     }
 
-    if (breakAddBtn && breakManualMins) {
+    if (breakAddBtn && breakManualMins && openEntry) {
       breakAddBtn.addEventListener("click", async () => {
         const mins = Number(breakManualMins.value);
         if (!Number.isFinite(mins) || mins <= 0) {
@@ -446,6 +490,41 @@ function safeJsonParse(s) {
   } catch {
     return null;
   }
+}
+
+async function getLatestTimeEntry({ timesheetId }) {
+  if (!timesheetId) return null;
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select("id, timesheet_id, clock_in, clock_out, break_minutes, notes, created_at")
+    .eq("timesheet_id", timesheetId)
+    .order("clock_in", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+function calcWorkedLabel({ clockIn, clockOut, breakMinutes, breakIsPaid }) {
+  if (!clockIn || !clockOut) return "";
+
+  const start = new Date(clockIn).getTime();
+  const end = new Date(clockOut).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return "";
+
+  let diffMs = end - start;
+
+  if (!breakIsPaid) {
+    const bm = Number(breakMinutes || 0);
+    diffMs -= bm * 60000;
+  }
+
+  const totalMins = Math.max(0, Math.floor(diffMs / 60000));
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+
+  return `${h}h ${m}m`;
 }
 
 function renderStatusBadge(status) {
