@@ -87,6 +87,17 @@ content.innerHTML = `
 
       <div class="wl-form__row">
         <div>
+          <label>Track time</label>
+          <select id="trackTime">
+            <option value="true" selected>Yes (clock in/out)</option>
+            <option value="false">No (pay full shift)</option>
+          </select>
+          <div style="font-size:12px; opacity:.75; margin-top:6px;">
+            If disabled, employee gets paid the scheduled hours (no timesheet tracking).
+          </div>
+        </div>
+
+        <div>
           <label>Break (optional)</label>
           <select id="breakMode">
             <option value="NONE" selected>No break</option>
@@ -94,10 +105,14 @@ content.innerHTML = `
             <option value="UNPAID">Unpaid break</option>
           </select>
         </div>
+      </div>
+
+      <div class="wl-form__row">
         <div>
           <label>Break minutes</label>
           <input id="breakMinutes" type="number" min="0" step="1" value="0" disabled />
         </div>
+        <div></div>
       </div>
 
       <div id="hint" style="font-size:13px; opacity:.85;"></div>
@@ -124,6 +139,8 @@ const endDateEl = document.querySelector("#endDate");
 const startTimeEl = document.querySelector("#startTime");
 const endTimeEl = document.querySelector("#endTime");
 
+const trackTimeEl = document.querySelector("#trackTime");
+
 const breakModeEl = document.querySelector("#breakMode");
 const breakMinutesEl = document.querySelector("#breakMinutes");
 
@@ -142,10 +159,7 @@ function buildTimeOptions() {
 function renderTimeSelect(selectEl) {
   const times = buildTimeOptions();
   selectEl.innerHTML = times
-    .map((t) => {
-      const label = t.slice(0, 5); // HH:MM
-      return `<option value="${t}">${label}</option>`;
-    })
+    .map((t) => `<option value="${t}">${t.slice(0, 5)}</option>`)
     .join("");
 }
 renderTimeSelect(startTimeEl);
@@ -166,21 +180,20 @@ endTimeEl.value = "17:00:00";
 
 // Break enable/disable
 breakModeEl.addEventListener("change", () => {
-  const mode = breakModeEl.value;
-  const enabled = mode !== "NONE";
+  const enabled = breakModeEl.value !== "NONE";
   breakMinutesEl.disabled = !enabled;
   if (!enabled) breakMinutesEl.value = "0";
   updateHint();
 });
 breakMinutesEl.addEventListener("input", updateHint);
 startDateEl.addEventListener("change", () => {
-  // keep end date aligned by default
   if (!endDateEl.value) endDateEl.value = startDateEl.value;
   updateHint();
 });
 endDateEl.addEventListener("change", updateHint);
 startTimeEl.addEventListener("change", updateHint);
 endTimeEl.addEventListener("change", updateHint);
+trackTimeEl.addEventListener("change", updateHint);
 
 // Load employees for assignment dropdown
 try {
@@ -197,12 +210,10 @@ try {
       .join("")}
   `;
 } catch (e) {
-  // Don't block creation if employees can't load
   console.warn("Could not load employees", e);
 }
 
 function dtMs(dateStr, timeStr) {
-  // dateStr: YYYY-MM-DD, timeStr: HH:MM:SS
   return new Date(`${dateStr}T${timeStr}`).getTime();
 }
 
@@ -236,9 +247,11 @@ function updateHint() {
   if (mode === "PAID") breakText = `Paid break: ${breakMins} min`;
   if (mode === "UNPAID") breakText = `Unpaid break: ${breakMins} min`;
 
+  const trackTime = trackTimeEl.value === "true" ? "Time tracking ON" : "Time tracking OFF";
+
   hintEl.innerHTML = `
     <div style="font-size:13px; opacity:.9;">
-      Duration: <b>${hours}h ${rem}m</b> • ${escapeHtml(breakText)}
+      Duration: <b>${hours}h ${rem}m</b> • ${escapeHtml(breakText)} • ${escapeHtml(trackTime)}
     </div>
   `;
 }
@@ -250,7 +263,6 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   const btn = e.target.querySelector('button[type="submit"]');
 
   resultEl.innerHTML = "";
-  hintEl.innerHTML = "";
 
   const title = titleEl.value.trim();
   const description = descEl.value.trim();
@@ -262,10 +274,12 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   const start_at = startTimeEl.value;
   const end_at = endTimeEl.value;
 
+  const track_time = trackTimeEl.value === "true";
+
   const breakMode = breakModeEl.value;
   const breakMinutes = Number(breakMinutesEl.value || 0);
-  const break_is_paid = breakMode === "PAID";
   const hasBreak = breakMode !== "NONE";
+  const break_is_paid = breakMode === "PAID";
 
   if (!title) return showErr("Title is required.");
   if (!shift_date) return showErr("Start date is required.");
@@ -276,15 +290,15 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
 
   const startMs = dtMs(shift_date, start_at);
   const endMs = dtMs(end_date, end_at);
-
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return showErr("Invalid date/time.");
   if (endMs <= startMs) return showErr("End must be after start.");
 
-  if (hasBreak && (!Number.isFinite(breakMinutes) || breakMinutes < 0)) {
-    return showErr("Break minutes must be 0 or more.");
+  if (hasBreak) {
+    if (!Number.isFinite(breakMinutes) || breakMinutes <= 0) {
+      return showErr("Break minutes must be greater than 0 when break is enabled.");
+    }
   }
 
-  // Payload (requires shifts.end_date column)
   const payload = {
     organization_id: org.id,
     title,
@@ -295,9 +309,10 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     end_date,
     start_at,
     end_at,
-    // these two assume you added/kept them in shifts table
+    track_time,
+
     break_minutes: hasBreak ? breakMinutes : 0,
-    break_is_paid: hasBreak ? break_is_paid : true, // irrelevant if no break
+    break_is_paid: hasBreak ? break_is_paid : false,
   };
 
   try {
@@ -306,7 +321,6 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
 
     const shift = await createShift(payload);
 
-    // Optional assign immediately
     const employeeUserId = employeeSelect.value || "";
     if (employeeUserId) {
       await assignShiftToEmployee({ shiftId: shift.id, employeeUserId });
@@ -335,6 +349,7 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     breakModeEl.value = "NONE";
     breakMinutesEl.value = "0";
     breakMinutesEl.disabled = true;
+    trackTimeEl.value = "true";
     employeeSelect.value = "";
 
     updateHint();
