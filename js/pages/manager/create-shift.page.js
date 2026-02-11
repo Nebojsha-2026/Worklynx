@@ -87,13 +87,13 @@ content.innerHTML = `
 
       <div class="wl-form__row">
         <div>
-          <label>Track time</label>
+          <label>Time tracking</label>
           <select id="trackTime">
-            <option value="true" selected>Yes (clock in/out)</option>
-            <option value="false">No (pay full shift)</option>
+            <option value="true" selected>Track time (clock in/out)</option>
+            <option value="false">No tracking required</option>
           </select>
           <div style="font-size:12px; opacity:.75; margin-top:6px;">
-            If disabled, employee gets paid the scheduled hours (no timesheet tracking).
+            If disabled, employee can still clock in/out, but pay can be based on scheduled shift.
           </div>
         </div>
 
@@ -197,8 +197,13 @@ trackTimeEl.addEventListener("change", updateHint);
 
 // Load employees for assignment dropdown
 try {
-  const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
-  const employees = (members || []).filter((m) => String(m.role).toUpperCase() === "EMPLOYEE");
+  const members = await listOrgMembers({
+    organizationId: org.id,
+    roles: ["EMPLOYEE"],
+  });
+  const employees = (members || []).filter(
+    (m) => String(m.role).toUpperCase() === "EMPLOYEE"
+  );
 
   employeeSelect.innerHTML = `
     <option value="" selected>(No assignment)</option>
@@ -247,11 +252,12 @@ function updateHint() {
   if (mode === "PAID") breakText = `Paid break: ${breakMins} min`;
   if (mode === "UNPAID") breakText = `Unpaid break: ${breakMins} min`;
 
-  const trackTime = trackTimeEl.value === "true" ? "Time tracking ON" : "Time tracking OFF";
+  const trackText =
+    trackTimeEl.value === "true" ? "Time tracking ON" : "No tracking required";
 
   hintEl.innerHTML = `
     <div style="font-size:13px; opacity:.9;">
-      Duration: <b>${hours}h ${rem}m</b> • ${escapeHtml(breakText)} • ${escapeHtml(trackTime)}
+      Duration: <b>${hours}h ${rem}m</b> • ${escapeHtml(breakText)} • ${escapeHtml(trackText)}
     </div>
   `;
 }
@@ -286,16 +292,20 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
   if (!end_date) return showErr("End date is required.");
   if (!start_at) return showErr("Start time is required.");
   if (!end_at) return showErr("End time is required.");
-  if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) return showErr("Hourly rate must be greater than 0.");
+  if (!Number.isFinite(hourlyRate) || hourlyRate <= 0)
+    return showErr("Hourly rate must be greater than 0.");
 
   const startMs = dtMs(shift_date, start_at);
   const endMs = dtMs(end_date, end_at);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return showErr("Invalid date/time.");
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs))
+    return showErr("Invalid date/time.");
   if (endMs <= startMs) return showErr("End must be after start.");
 
   if (hasBreak) {
     if (!Number.isFinite(breakMinutes) || breakMinutes <= 0) {
-      return showErr("Break minutes must be greater than 0 when break is enabled.");
+      return showErr(
+        "Break minutes must be greater than 0 when break is enabled."
+      );
     }
   }
 
@@ -309,10 +319,9 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
     end_date,
     start_at,
     end_at,
-    track_time,
-
     break_minutes: hasBreak ? breakMinutes : 0,
-    break_is_paid: hasBreak ? break_is_paid : false,
+    break_is_paid: hasBreak ? break_is_paid : true, // irrelevant if no break
+    track_time,
   };
 
   try {
@@ -332,9 +341,15 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
         <div style="opacity:.9; margin-top:6px;">
           <div><b>${escapeHtml(shift.title)}</b></div>
           <div style="font-size:13px; opacity:.85;">
-            ${escapeHtml(shift.shift_date)} ${escapeHtml(shift.start_at)} → ${escapeHtml(shift.end_date)} ${escapeHtml(shift.end_at)}
+            ${escapeHtml(shift.shift_date)} ${escapeHtml(
+      shift.start_at
+    )} → ${escapeHtml(shift.end_date)} ${escapeHtml(shift.end_at)}
           </div>
-          ${employeeUserId ? `<div style="font-size:13px; opacity:.85; margin-top:6px;">Employee assigned ✅</div>` : ""}
+          ${
+            employeeUserId
+              ? `<div style="font-size:13px; opacity:.85; margin-top:6px;">Employee assigned ✅</div>`
+              : ""
+          }
         </div>
       </div>
     `;
@@ -362,7 +377,9 @@ document.querySelector("#shiftForm").addEventListener("submit", async (e) => {
 });
 
 function showErr(msg) {
-  resultEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(msg)}</div>`;
+  resultEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+    msg
+  )}</div>`;
 }
 
 function escapeHtml(str) {
