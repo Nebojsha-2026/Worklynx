@@ -1,38 +1,49 @@
 // js/data/timeEntries.api.js
 import { getSupabase } from "../core/supabaseClient.js";
-import { getSession } from "../core/session.js";
 
-/**
- * Creates a time entry against an existing timesheet.
- */
-export async function createTimeEntry({
-  timesheetId,
-  clockInIso,
-  clockOutIso = null,
-  breakMinutes = 0,
-  notes = "",
-}) {
+export async function clockIn({ timesheetId }) {
   const supabase = getSupabase();
-  const session = await getSession();
-  const userId = session?.user?.id;
-  if (!userId) throw new Error("Not authenticated.");
-
-  if (!timesheetId) throw new Error("Missing timesheetId.");
-  if (!clockInIso) throw new Error("Missing clockIn.");
-
-  const payload = {
-    timesheet_id: timesheetId,
-    clock_in: clockInIso,
-    clock_out: clockOutIso,
-    break_minutes: breakMinutes,
-    notes,
-  };
 
   const { data, error } = await supabase
     .from("time_entries")
-    .insert(payload)
+    .insert({
+      timesheet_id: timesheetId,
+      clock_in: new Date().toISOString(),
+    })
     .select("*")
     .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function clockOut({ timeEntryId }) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .update({
+      clock_out: new Date().toISOString(),
+    })
+    .eq("id", timeEntryId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getOpenTimeEntry({ timesheetId }) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select("*")
+    .eq("timesheet_id", timesheetId)
+    .is("clock_out", null)
+    .order("clock_in", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
   return data;
