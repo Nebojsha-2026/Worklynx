@@ -53,11 +53,27 @@ const showCancelledEl = document.querySelector("#showCancelled");
 
 let allShifts = [];
 
-async function load() {
-  listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
+showCancelledEl.addEventListener("change", render);
 
-  const assigns = await listMyShiftAssignments();
-  const ids = assigns.map((a) => a.shift_id);
+try {
+  await load();
+} catch (err) {
+  console.error(err);
+  listEl.innerHTML = `
+    <div class="wl-alert wl-alert--error">
+      Failed to load shifts. ${escapeHtml(err?.message || "")}
+    </div>
+  `;
+}
+
+/* --------------------------
+   Data loading
+--------------------------- */
+async function load() {
+  listEl.innerHTML = `<div style="opacity:.85;">Loading your shifts…</div>`;
+
+  const assigns = await listMyShiftAssignments(); // [{ shift_id, ... }]
+  const ids = (assigns || []).map((a) => a.shift_id).filter(Boolean);
 
   if (!ids.length) {
     allShifts = [];
@@ -78,18 +94,13 @@ async function load() {
   render();
 }
 
+/* --------------------------
+   Rendering
+--------------------------- */
 function render() {
-  const showCancelled = showCancelledEl.checked;
-
   const filtered = allShifts.filter((s) => {
-    const st = String(s.status || "ACTIVE").toUpperCase();
-
-    // Employees should never see drafts
-    if (st === "DRAFT") return false;
-
-    // Cancelled hidden unless toggled on
-    if (!showCancelled && st === "CANCELLED") return false;
-
+    const status = String(s.status || "PUBLISHED").toUpperCase();
+    if (!showCancelledEl.checked && status === "CANCELLED") return false;
     return true;
   });
 
@@ -102,7 +113,7 @@ function render() {
     return;
   }
 
-  // Sort by date then start time (since start_at is TIME)
+  // Sort by date then start time (TIME columns)
   filtered.sort((a, b) => {
     const ad = String(a.shift_date || "");
     const bd = String(b.shift_date || "");
@@ -116,18 +127,42 @@ function render() {
 function renderShiftRow(s) {
   const href = path(`/app/employee/shift.html?id=${encodeURIComponent(s.id)}`);
 
+  const status = String(s.status || "PUBLISHED").toUpperCase();
+  const isCancelled = status === "CANCELLED";
+
+  const title = s.title || "Untitled shift";
+  const date = s.shift_date || "";
+  const start = s.start_at || "";
+  const end = s.end_at || "";
+
   return `
-    <a class="wl-card wl-panel" href="${href}" style="display:block;">
+    <a class="wl-card wl-panel ${isCancelled ? "is-cancelled" : ""}"
+       href="${href}"
+       style="display:block;">
       <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
         <div>
-          <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+          <div style="font-weight:800;">${escapeHtml(title)}</div>
+
           <div style="opacity:.85; font-size:13px; margin-top:4px;">
-            ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
+            ${escapeHtml(date)} • ${escapeHtml(start)} → ${escapeHtml(end)}
             ${s.location ? ` • ${escapeHtml(s.location)}` : ""}
           </div>
+
+          <div style="font-size:13px; opacity:.9; margin-top:6px;">
+            ✅ You are assigned to this shift
+          </div>
+
+          ${
+            isCancelled
+              ? `<div style="font-size:13px; margin-top:6px; opacity:.85;">
+                   This shift has been cancelled.
+                 </div>`
+              : ""
+          }
         </div>
+
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-          ${renderStatusBadge(s.status)}
+          ${renderStatusBadge(status)}
           <div style="opacity:.8; font-size:13px;">View →</div>
         </div>
       </div>
@@ -135,12 +170,15 @@ function renderShiftRow(s) {
   `;
 }
 
-function renderStatusBadge(statusRaw) {
-  const status = String(statusRaw || "ACTIVE").toUpperCase();
-
+/* --------------------------
+   Helpers
+--------------------------- */
+function renderStatusBadge(status) {
   const map = {
+    PUBLISHED: { cls: "wl-badge--active", label: "Active" },
     ACTIVE: { cls: "wl-badge--active", label: "Active" },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT: { cls: "wl-badge--draft", label: "Draft" },
     OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
 
@@ -155,17 +193,4 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-showCancelledEl.addEventListener("change", render);
-
-try {
-  await load();
-} catch (err) {
-  console.error(err);
-  listEl.innerHTML = `
-    <div class="wl-alert wl-alert--error">
-      Failed to load shifts. ${escapeHtml(err?.message || "")}
-    </div>
-  `;
 }
