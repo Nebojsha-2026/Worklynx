@@ -43,7 +43,10 @@ content.innerHTML = `
       <h2 style="margin:0;">Upcoming shifts</h2>
       <button id="refreshBtn" class="wl-btn" type="button">Refresh</button>
     </div>
+
     <div id="shiftList" style="margin-top:12px;"></div>
+
+    <div id="shiftControls" style="margin-top:12px; display:none;"></div>
   </section>
 `;
 
@@ -53,18 +56,39 @@ await loadUpcoming();
 
 async function loadUpcoming() {
   const listEl = document.querySelector("#shiftList");
+  const controlsEl = document.querySelector("#shiftControls");
+
   listEl.innerHTML = `<div style="opacity:.85;">Loading shifts…</div>`;
+  controlsEl.style.display = "none";
+  controlsEl.innerHTML = "";
 
   try {
-    const shifts = await listShifts({ organizationId: org.id, limit: 50 });
+    const all = await listShifts({ organizationId: org.id, limit: 200 });
 
-    if (!shifts.length) {
-      listEl.innerHTML = `<div style="opacity:.85;">No shifts yet. Create one!</div>`;
+    // Only show ACTIVE + OFFERED in "Upcoming"
+    const allowed = new Set(["ACTIVE", "OFFERED"]);
+    const visible = (all || []).filter((s) =>
+      allowed.has(String(s.status || "ACTIVE").toUpperCase())
+    );
+
+    if (!visible.length) {
+      listEl.innerHTML = `
+        <div class="wl-alert" style="opacity:.95;">
+          No upcoming shifts (Active/Offered). Create one!
+        </div>
+      `;
       return;
     }
 
-    // Employee label map (user_id -> label)
-    // NOTE: this assumes listOrgMembers supports roles param. If yours doesn't, remove roles and filter.
+    // Sort by date then start time
+    visible.sort((a, b) => {
+      const ad = String(a.shift_date || "");
+      const bd = String(b.shift_date || "");
+      if (ad !== bd) return ad.localeCompare(bd);
+      return String(a.start_at || "").localeCompare(String(b.start_at || ""));
+    });
+
+    // Load employee labels (EMPLOYEE only)
     const members = await listOrgMembers({ organizationId: org.id, roles: ["EMPLOYEE"] });
     const employeeLabelById = new Map(
       (members || []).map((m) => [
@@ -73,29 +97,98 @@ async function loadUpcoming() {
       ])
     );
 
-    // Assignments grouped by shift
-    const shiftIds = shifts.map((s) => s.id);
+    // Load assignments for these shifts (for counts + chips)
+    const shiftIds = visible.map((s) => s.id);
     const assigns = await listAssignmentsForShifts({ shiftIds });
 
     const assignedByShift = new Map(); // shiftId -> [employee_user_id]
     for (const a of assigns || []) {
-      const arr = assignedByShift.get(a.shift_id) || [];
+      const sid = a.shift_id;
+      const arr = assignedByShift.get(sid) || [];
       arr.push(a.employee_user_id);
-      assignedByShift.set(a.shift_id, arr);
+      assignedByShift.set(sid, arr);
     }
 
-    listEl.innerHTML = `
-      <div style="display:grid; gap:10px;">
-        ${shifts
-          .map((s) => renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById))
-          .join("")}
-      </div>
-    `;
+    // Pagination rules
+    const DEFAULT_LIMIT = 4;
+    const EXPANDED_LIMIT = 10;
+
+    const state = {
+      expanded: false,
+    };
+
+    function render() {
+      const limit = state.expanded ? EXPANDED_LIMIT : DEFAULT_LIMIT;
+      const slice = visible.slice(0, limit);
+
+      listEl.innerHTML = `
+        <div style="display:grid; gap:10px;">
+          ${slice
+            .map((s) =>
+              renderShiftCard(s, assignedByShift.get(s.id) || [], employeeLabelById)
+            )
+            .join("")}
+        </div>
+      `;
+
+      // Controls
+      const canExpand = visible.length > DEFAULT_LIMIT;
+      const hasMoreThan10 = visible.length > EXPANDED_LIMIT;
+
+      if (!canExpand && !hasMoreThan10) {
+        controlsEl.style.display = "none";
+        controlsEl.innerHTML = "";
+        return;
+      }
+
+      controlsEl.style.display = "flex";
+      controlsEl.style.alignItems = "center";
+      controlsEl.style.justifyContent = "space-between";
+      controlsEl.style.gap = "10px";
+      controlsEl.style.flexWrap = "wrap";
+
+      const shown = Math.min(limit, visible.length);
+
+      controlsEl.innerHTML = `
+        <div style="font-size:13px; opacity:.85;">
+          Showing <b>${shown}</b> of <b>${visible.length}</b>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          ${
+            canExpand
+              ? `
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; opacity:.9;">
+              <input id="toggleMore" type="checkbox" ${state.expanded ? "checked" : ""} />
+              Show up to ${EXPANDED_LIMIT}
+            </label>
+          `
+              : ""
+          }
+
+          ${
+            hasMoreThan10
+              ? `<a class="wl-btn" href="${path("/app/manager/shifts.html")}">View all →</a>`
+              : ""
+          }
+        </div>
+      `;
+
+      const toggle = document.querySelector("#toggleMore");
+      if (toggle) {
+        toggle.addEventListener("change", (e) => {
+          state.expanded = !!e.target.checked;
+          render();
+        });
+      }
+    }
+
+    render();
   } catch (err) {
     console.error(err);
     listEl.innerHTML = `
       <div class="wl-alert wl-alert--error">
-        Failed to load shifts: ${escapeHtml(err?.message || "Unknown error")}
+        Failed to load shifts: ${escapeHtml(err.message || "Unknown error")}
       </div>
     `;
   }
@@ -112,33 +205,23 @@ function renderShiftCard(s, assignedIds, labelMap) {
       <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
         <div>
           <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
-
           <div style="font-size:13px; opacity:.85; margin-top:4px;">
-            ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
+            ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
           </div>
+          ${s.location ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>` : ""}
 
-          ${
-            s.location
-              ? `<div style="font-size:13px; opacity:.8; margin-top:4px;">📍 ${escapeHtml(s.location)}</div>`
-              : ""
-          }
-
-          <div style="margin-top:8px; font-size:13px; opacity:.92;">
+          <div style="margin-top:8px; font-size:13px; opacity:.9;">
             <b>Assigned:</b> ${assignedCount}
           </div>
 
           ${
             assignedCount
               ? `
-                <div class="wl-chips" style="margin-top:6px;">
-                  ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
-                  ${
-                    assignedCount > 2
-                      ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>`
-                      : ""
-                  }
-                </div>
-              `
+            <div class="wl-chips" style="margin-top:6px;">
+              ${top2.map((name) => `<span class="wl-chip">${escapeHtml(name)}</span>`).join("")}
+              ${assignedCount > 2 ? `<span class="wl-chip"><small>+${assignedCount - 2} more</small></span>` : ""}
+            </div>
+          `
               : `<div style="font-size:13px; opacity:.75; margin-top:6px;">No one assigned yet</div>`
           }
         </div>
@@ -154,14 +237,12 @@ function renderShiftCard(s, assignedIds, labelMap) {
 
 function renderStatusBadge(statusRaw) {
   const status = String(statusRaw || "ACTIVE").toUpperCase();
-
   const map = {
     ACTIVE: { cls: "wl-badge--active", label: "Active" },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
     DRAFT: { cls: "wl-badge--draft", label: "Draft" },
     OFFERED: { cls: "wl-badge--offered", label: "Offered" },
   };
-
   const s = map[status] || { cls: "", label: status };
   return `<span class="wl-badge ${s.cls}">${escapeHtml(s.label)}</span>`;
 }
