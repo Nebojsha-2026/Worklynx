@@ -122,3 +122,26 @@
   border-color: rgba(59,130,246,0.55);
   background: rgba(59,130,246,0.12);
 }
+
+/* Assigned employee chips */
+.wl-chips{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+.wl-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--wl-border);
+  background: rgba(255,255,255,0.06);
+  font-size: 12px;
+  opacity: .95;
+}
+.wl-chip small{
+  opacity:.8;
+  font-size:11px;
+}
