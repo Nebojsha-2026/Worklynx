@@ -145,3 +145,13 @@
   opacity:.8;
   font-size:11px;
 }
+
+.wl-pill{
+  display:inline-block;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--wl-border);
+  background: rgba(255,255,255,0.06);
+  opacity: .95;
+}
