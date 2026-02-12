@@ -1,14 +1,14 @@
 // js/pages/employee.dashboard.page.js
-import { requireRole } from "../core/guards.js";
-import { renderHeader } from "../ui/header.js";
-import { renderFooter } from "../ui/footer.js";
-import { renderSidebar } from "../ui/sidebar.js";
-import { loadOrgContext } from "../core/orgContext.js";
-import { getSupabase } from "../core/supabaseClient.js";
-import { path } from "../core/config.js";
-import { getSession } from "../core/session.js";
+import { requireRole } from "../../core/guards.js";
+import { renderHeader } from "../../ui/header.js";
+import { renderFooter } from "../../ui/footer.js";
+import { renderSidebar } from "../../ui/sidebar.js";
+import { loadOrgContext } from "../../core/orgContext.js";
+import { getSupabase } from "../../core/supabaseClient.js";
+import { path } from "../../core/config.js";
+import { getSession } from "../../core/session.js";
 
-import { listMyShiftAssignments } from "../data/shiftAssignments.api.js";
+import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
 
 await requireRole(["EMPLOYEE"]);
 
