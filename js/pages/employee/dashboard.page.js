@@ -47,7 +47,6 @@ content.innerHTML = `
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-      
       <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
         <div style="font-size:12px; opacity:.8;">Available balance</div>
         <div id="cardBalance" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
@@ -66,7 +65,6 @@ content.innerHTML = `
         <div id="cardNextMeta" style="font-size:12px; opacity:.75; margin-top:6px;">—</div>
         <div id="cardNextBadge" style="margin-top:8px;"></div>
       </div>
-
     </div>
   </section>
 
@@ -118,7 +116,6 @@ const cardNextTitleEl = document.querySelector("#cardNextTitle");
 const cardNextMetaEl = document.querySelector("#cardNextMeta");
 const cardNextBadgeEl = document.querySelector("#cardNextBadge");
 
-
 try {
   const session = await getSession();
   const userId = session?.user?.id;
@@ -126,15 +123,12 @@ try {
 
   const upcoming = await loadUpcomingAssignedShifts({ days: 14 });
   const active = await getActiveClockedInShift({ userId });
-  
+
   renderTopCardsNextShift({ upcoming });
-  
   renderToday({ upcoming, active });
   renderUpcoming(upcoming);
-  
 
   await renderLedgerEarnings({ userId });
-  
 } catch (err) {
   console.error(err);
   todaySubEl.textContent = "Could not load dashboard.";
@@ -167,11 +161,11 @@ async function loadUpcomingAssignedShifts({ days }) {
 
   const dayStart = startOfDay(now).getTime();
 
-return (shifts || [])
-  .filter((s) => {
-    const start = shiftStartMs(s);
-    return Number.isFinite(start) && start >= dayStart && start <= end.getTime();
-  })
+  return (shifts || [])
+    .filter((s) => {
+      const start = shiftStartMs(s);
+      return Number.isFinite(start) && start >= dayStart && start <= end.getTime();
+    })
     .sort((a, b) => shiftStartMs(a) - shiftStartMs(b));
 }
 
@@ -225,7 +219,7 @@ async function getActiveClockedInShift({ userId }) {
    Render
 --------------------------- */
 
- function renderTopCardsNextShift({ upcoming }) {
+function renderTopCardsNextShift({ upcoming }) {
   const now = new Date();
   const nextShift = upcoming.find((s) => shiftStartMs(s) >= now.getTime()) || null;
 
@@ -237,7 +231,7 @@ async function getActiveClockedInShift({ userId }) {
   }
 
   const when = formatWhenLabel(nextShift.shift_date);
-  const time = `${String(nextShift.start_at || "").slice(0, 5)} → ${String(nextShift.end_at || "").slice(0, 5)}`;
+  const time = `${fmtTime(nextShift.start_at)} → ${fmtTime(nextShift.end_at)}`;
   const loc = nextShift.location ? ` • ${nextShift.location}` : "";
   const needsTracking = nextShift.track_time === false ? false : true;
 
@@ -261,9 +255,7 @@ function renderToday({ upcoming, active }) {
     todaySubEl.textContent = "You are currently clocked in.";
     todayPillEl.innerHTML = `<span class="wl-badge wl-badge--active">Clocked in</span>`;
 
-    const since = active.timeEntry?.clock_in
-      ? new Date(active.timeEntry.clock_in).toLocaleString()
-      : "";
+    const since = active.timeEntry?.clock_in ? new Date(active.timeEntry.clock_in).toLocaleString() : "";
 
     todayBodyEl.innerHTML = `
       <div class="wl-alert">
@@ -280,7 +272,7 @@ function renderToday({ upcoming, active }) {
     `;
     return;
   }
-  
+
   todayPillEl.innerHTML = `<span class="wl-badge wl-badge--draft">Not clocked in</span>`;
 
   if (!nextShift) {
@@ -307,7 +299,7 @@ function renderToday({ upcoming, active }) {
         <div style="min-width:0;">
           <div style="font-weight:900;">${escapeHtml(nextShift.title || "Upcoming shift")}</div>
           <div style="font-size:13px; opacity:.85; margin-top:6px;">
-            <b>${escapeHtml(when)}</b> • ${escapeHtml(nextShift.start_at || "")} → ${escapeHtml(nextShift.end_at || "")}
+            <b>${escapeHtml(when)}</b> • ${escapeHtml(fmtTime(nextShift.start_at))} → ${escapeHtml(fmtTime(nextShift.end_at))}
             ${escapeHtml(loc)}
           </div>
           ${
@@ -345,7 +337,7 @@ function renderUpcoming(shifts) {
     ${slice.map(renderShiftCard).join("")}
     ${
       shifts.length > max
-        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
+        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; width:fit-content;">
              See more shifts →
            </a>`
         : ""
@@ -368,7 +360,7 @@ function renderShiftCard(s) {
             ${escapeHtml(s.title || "Untitled shift")}
           </div>
           <div style="opacity:.85; font-size:13px; margin-top:6px;">
-            <b>${escapeHtml(when)}</b> • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
+            <b>${escapeHtml(when)}</b> • ${escapeHtml(fmtTime(s.start_at))} → ${escapeHtml(fmtTime(s.end_at))}
             ${s.location ? ` • 📍 ${escapeHtml(s.location)}` : ""}
           </div>
           ${needsTracking ? "" : `<div style="font-size:13px; opacity:.85; margin-top:6px;">No tracking required</div>`}
@@ -397,9 +389,9 @@ async function renderLedgerEarnings({ userId }) {
     sumLedger({ userId, from: monthStart, to: now }),
     sumLedger({ userId, from: null, to: null }),
   ]);
-  
-cardWeekEl.textContent = fmtMoney(weekTotal);
-cardBalanceEl.textContent = fmtMoney(allTimeTotal);
+
+  cardWeekEl.textContent = fmtMoney(weekTotal);
+  cardBalanceEl.textContent = fmtMoney(allTimeTotal);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
@@ -448,8 +440,7 @@ async function sumLedger({ userId, from, to }) {
   const { data, error } = await q;
   if (error) throw error;
 
-  const total = (data || []).reduce((acc, r) => acc + Number(r.amount || 0), 0);
-  return total;
+  return (data || []).reduce((acc, r) => acc + Number(r.amount || 0), 0);
 }
 
 async function fetchRecentLedger({ userId, limit }) {
@@ -468,7 +459,7 @@ function renderEarningRow(r) {
   const s = r.shift || {};
   const title = s.title || "Shift";
   const when = s.shift_date ? formatWhenLabel(s.shift_date) : "";
-  const time = s.start_at && s.end_at ? `${String(s.start_at).slice(0,5)} → ${String(s.end_at).slice(0,5)}` : "";
+  const time = s.start_at && s.end_at ? `${fmtTime(s.start_at)} → ${fmtTime(s.end_at)}` : "";
 
   const badge =
     r.source === "SCHEDULED"
@@ -503,6 +494,7 @@ function renderEarningRow(r) {
 /* --------------------------
    Shared helpers
 --------------------------- */
+
 function startOfDay(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setHours(0, 0, 0, 0);
@@ -512,6 +504,10 @@ function startOfDay(d) {
 function shiftStartMs(s) {
   if (!s?.shift_date || !s?.start_at) return NaN;
   return new Date(`${s.shift_date}T${String(s.start_at).slice(0, 8)}`).getTime();
+}
+
+function fmtTime(t) {
+  return String(t || "").slice(0, 5); // "18:00:00" -> "18:00"
 }
 
 function isoDate(d) {
