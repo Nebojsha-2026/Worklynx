@@ -9,7 +9,12 @@ import { path } from "../../core/config.js";
 
 import { getSession } from "../../core/session.js";
 import { getOrCreateTimesheetForShift } from "../../data/timesheets.api.js";
-import { getOpenTimeEntry, clockIn, clockOut, addBreakMinutes } from "../../data/timeEntries.api.js";
+import {
+  getOpenTimeEntry,
+  clockIn,
+  clockOut,
+  addBreakMinutes,
+} from "../../data/timeEntries.api.js";
 
 await requireRole(["EMPLOYEE"]);
 
@@ -66,8 +71,13 @@ const shiftBreakMinutes = Number(shift.break_minutes || 0);
 const breakIsPaid = !!shift.break_is_paid;
 const hourlyRate = shift.hourly_rate != null ? Number(shift.hourly_rate) : null;
 
+// ✅ NEW: track time flag (default true if missing)
+const trackTime = shift.track_time !== false;
+
 const breakSummary =
-  shiftBreakMinutes > 0 ? `${shiftBreakMinutes} min (${breakIsPaid ? "paid" : "unpaid"})` : "No break";
+  shiftBreakMinutes > 0
+    ? `${shiftBreakMinutes} min (${breakIsPaid ? "paid" : "unpaid"})`
+    : "No break";
 
 content.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -108,8 +118,13 @@ content.innerHTML = `
     <div style="display:grid; gap:10px;">
       <div><b>Date:</b> ${escapeHtml(shift.shift_date || "")}</div>
       <div><b>Time:</b> ${escapeHtml(shift.start_at || "")} → ${escapeHtml(shift.end_at || "")}</div>
-      ${hourlyRate != null ? `<div><b>Rate:</b> ${escapeHtml(String(hourlyRate))} / hr</div>` : ""}
+      ${
+        hourlyRate != null
+          ? `<div><b>Rate:</b> ${escapeHtml(String(hourlyRate))} / hr</div>`
+          : ""
+      }
       <div><b>Break:</b> ${escapeHtml(breakSummary)}</div>
+      <div><b>Time tracking:</b> ${trackTime ? "Required" : "Not required"}</div>
       ${shift.location ? `<div><b>Location:</b> ${escapeHtml(shift.location)}</div>` : ""}
       ${
         shift.description
@@ -148,7 +163,10 @@ try {
   const userId = session?.user?.id;
   if (!userId) throw new Error("Not authenticated.");
 
-  const timesheet = await getOrCreateTimesheetForShift({ shiftId, organizationId: org.id });
+  const timesheet = await getOrCreateTimesheetForShift({
+    shiftId,
+    organizationId: org.id,
+  });
 
   let openEntry = await getOpenTimeEntry({ timesheetId: timesheet.id });
   let latestEntry = await getLatestTimeEntry({ timesheetId: timesheet.id });
@@ -166,15 +184,22 @@ try {
     const effectiveEntry = openEntry || latestEntry || null;
 
     tsStateEl.textContent = openEntry ? "Clocked in" : "Ready";
-    tsStateEl.className = `wl-badge ${openEntry ? "wl-badge--active" : "wl-badge--draft"}`;
+    tsStateEl.className = `wl-badge ${
+      openEntry ? "wl-badge--active" : "wl-badge--draft"
+    }`;
 
-    const clockedInAt = openEntry?.clock_in ? new Date(openEntry.clock_in).toLocaleString() : null;
+    const clockedInAt = openEntry?.clock_in
+      ? new Date(openEntry.clock_in).toLocaleString()
+      : null;
+
     const breakMins = Number(effectiveEntry?.break_minutes || 0);
 
     const breakKey = openEntry ? `wl_break_${openEntry.id}` : null;
     const breakState = breakKey ? safeJsonParse(localStorage.getItem(breakKey)) : null;
     const isOnBreak = !!(breakState && breakState.startedAt);
-    const breakStartedLabel = isOnBreak ? new Date(breakState.startedAt).toLocaleTimeString() : null;
+    const breakStartedLabel = isOnBreak
+      ? new Date(breakState.startedAt).toLocaleTimeString()
+      : null;
 
     const totals = calcTotals({
       clockIn: effectiveEntry?.clock_in,
@@ -184,27 +209,41 @@ try {
       hourlyRate,
     });
 
+    // ✅ NEW: show banner when tracking is not required
+    const noTrackingBanner = !trackTime
+      ? `<div class="wl-alert" style="opacity:.95;">
+           <b>No tracking required for this shift.</b><br/>
+           <span style="opacity:.85; font-size:13px;">
+             You can still clock in/out (optional), but pay may be based on the scheduled shift.
+           </span>
+         </div>`
+      : "";
+
     tsBodyEl.innerHTML = `
       <div style="display:grid; gap:10px;">
 
-        ${
-  totals
-    ? `<div class="wl-alert wl-alert--success">
-         <div><b>Total worked:</b> ${escapeHtml(totals.workedLabel)}</div>
-         ${
-           totals.payLabel
-             ? `<div style="margin-top:6px;"><b>Estimated pay:</b> ${escapeHtml(totals.payLabel)}</div>`
-             : ""
-         }
+        ${noTrackingBanner}
 
-         <div style="font-size:13px; opacity:.85; margin-top:6px;">
-           ${breakIsPaid ? "Pay includes break minutes." : "Pay excludes unpaid break minutes."}
-           <br/>
-           Pay calculated from: <b>${escapeHtml(totals.paidRoundedLabel)}</b>
-         </div>
-       </div>`
-    : ""
-}
+        ${
+          totals
+            ? `<div class="wl-alert wl-alert--success">
+                 <div><b>Total worked:</b> ${escapeHtml(totals.workedLabel)}</div>
+                 ${
+                   totals.payLabel
+                     ? `<div style="margin-top:6px;"><b>Estimated pay:</b> ${escapeHtml(
+                         totals.payLabel
+                       )}</div>`
+                     : ""
+                 }
+                 <div style="font-size:13px; opacity:.85; margin-top:6px;">
+                   ${breakIsPaid ? "Pay includes break minutes." : "Pay excludes unpaid break minutes."}
+                   <br/>
+                   Pay calculated from: <b>${escapeHtml(totals.paidRoundedLabel)}</b>
+                 </div>
+               </div>`
+            : ""
+        }
+
         ${
           openEntry
             ? `<div class="wl-alert">
@@ -221,21 +260,33 @@ try {
           <section class="wl-card wl-panel" style="padding:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
               <div style="font-weight:800;">Break</div>
-              ${isOnBreak ? `<span class="wl-badge wl-badge--offered">On break</span>` : `<span class="wl-badge wl-badge--draft">Ready</span>`}
+              ${
+                isOnBreak
+                  ? `<span class="wl-badge wl-badge--offered">On break</span>`
+                  : `<span class="wl-badge wl-badge--draft">Ready</span>`
+              }
             </div>
 
             <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
               ${
                 isOnBreak
-                  ? `<div style="font-size:13px; opacity:.85;">Started at <b>${escapeHtml(breakStartedLabel)}</b></div>`
+                  ? `<div style="font-size:13px; opacity:.85;">Started at <b>${escapeHtml(
+                      breakStartedLabel
+                    )}</b></div>`
                   : `<input id="breakManualMins" type="number" min="1" step="1" placeholder="Add manual minutes"
                            style="max-width:220px;" />`
               }
             </div>
 
             <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-              ${isOnBreak ? `<button id="breakEndBtn" class="wl-btn" type="button">End break</button>` : `<button id="breakStartBtn" class="wl-btn" type="button">Start break</button>`}
-              <button id="breakAddBtn" class="wl-btn" type="button" ${isOnBreak ? "disabled" : ""}>Add minutes</button>
+              ${
+                isOnBreak
+                  ? `<button id="breakEndBtn" class="wl-btn" type="button">End break</button>`
+                  : `<button id="breakStartBtn" class="wl-btn" type="button">Start break</button>`
+              }
+              <button id="breakAddBtn" class="wl-btn" type="button" ${
+                isOnBreak ? "disabled" : ""
+              }>Add minutes</button>
             </div>
 
             <div id="breakMsg" style="margin-top:10px;"></div>
@@ -247,8 +298,12 @@ try {
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           ${
             openEntry
-              ? `<button id="clockOutBtn" class="wl-btn" type="button" ${isOnBreak ? "disabled" : ""}>Clock out</button>`
-              : `<button id="clockInBtn" class="wl-btn" type="button" ${isCancelled ? "disabled" : ""}>Clock in</button>`
+              ? `<button id="clockOutBtn" class="wl-btn" type="button" ${
+                  isOnBreak ? "disabled" : ""
+                }>Clock out</button>`
+              : `<button id="clockInBtn" class="wl-btn" type="button" ${
+                  isCancelled ? "disabled" : ""
+                }>Clock in</button>`
           }
         </div>
 
@@ -282,7 +337,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock in failed")}</div>`;
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Clock in failed"
+          )}</div>`;
         } finally {
           setBusy(clockInBtn, false, "Clock in");
         }
@@ -305,7 +362,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Clock out failed")}</div>`;
+          tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Clock out failed"
+          )}</div>`;
         } finally {
           setBusy(clockOutBtn, false, "Clock out");
         }
@@ -321,7 +380,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to start break")}</div>`;
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to start break"
+          )}</div>`;
         }
       });
     }
@@ -349,7 +410,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to end break")}</div>`;
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to end break"
+          )}</div>`;
         } finally {
           setBusy(breakEndBtn, false, "End break");
         }
@@ -376,7 +439,9 @@ try {
           await refresh();
         } catch (err) {
           console.error(err);
-          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to add break")}</div>`;
+          breakMsg.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+            err.message || "Failed to add break"
+          )}</div>`;
         } finally {
           setBusy(breakAddBtn, false, "Add minutes");
         }
@@ -388,7 +453,9 @@ try {
   tsStateEl.textContent = "Error";
   tsStateEl.className = "wl-badge wl-badge--cancelled";
   tsBodyEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load timesheet.</div>`;
-  tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "")}</div>`;
+  tsMsgEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(
+    err.message || ""
+  )}</div>`;
 }
 
 function setBusy(btn, isBusy, label) {
@@ -426,25 +493,16 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
   const end = new Date(clockOut).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
 
-  // 1) Always compute TOTAL worked time from timestamps (round to nearest minute, min 1 if any time passed)
   const diffMs = end - start;
   const totalWorkedMins = Math.max(1, Math.round(diffMs / 60000));
 
-  // 2) Compute payable minutes (raw) based on paid/unpaid break
   const b = Math.max(0, Number(breakMinutes || 0));
   const paidMinsRaw = breakIsPaid ? totalWorkedMins : Math.max(0, totalWorkedMins - b);
 
-  // 3) Apply pay rounding rules:
-  //    0–19 -> 0
-  //    20–44 -> 30
-  //    45–74 -> 60
-  //    75–104 -> 90
-  //    and so on in 30-min blocks
   function roundForPay(mins) {
     if (!mins || mins <= 0) return 0;
     if (mins <= 19) return 0;
 
-    // Work in 60-minute chunks + remainder
     const hours = Math.floor(mins / 60);
     const rem = mins % 60;
 
@@ -453,12 +511,11 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
     else if (rem <= 44) roundedRem = 30;
     else roundedRem = 60;
 
-    return (hours * 60) + roundedRem;
+    return hours * 60 + roundedRem;
   }
 
   const paidMinsRounded = roundForPay(paidMinsRaw);
 
-  // Labels
   const workedLabel = `${Math.floor(totalWorkedMins / 60)}h ${totalWorkedMins % 60}m`;
 
   let payLabel = "";
@@ -467,15 +524,12 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
     payLabel = `$${pay.toFixed(2)}`;
   }
 
-  // Extra info (optional but helpful)
-  const paidLabel = `${Math.floor(paidMinsRaw / 60)}h ${paidMinsRaw % 60}m`;
   const paidRoundedLabel = `${Math.floor(paidMinsRounded / 60)}h ${paidMinsRounded % 60}m`;
 
   return {
-    workedLabel,          // always real elapsed minutes
-    payLabel,             // based on rounding
-    paidLabel,            // raw payable minutes (after break)
-    paidRoundedLabel,     // payable minutes after rounding
+    workedLabel,
+    payLabel,
+    paidRoundedLabel,
   };
 }
 
