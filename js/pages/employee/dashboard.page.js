@@ -46,6 +46,31 @@ content.innerHTML = `
   </div>
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
+    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
+      
+      <div class="wl-card wl-panel" style="padding:14px;">
+        <div style="font-size:12px; opacity:.8;">Available balance</div>
+        <div id="cardBalance" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
+        <div style="font-size:12px; opacity:.7; margin-top:6px;">From posted earnings</div>
+      </div>
+
+      <div class="wl-card wl-panel" style="padding:14px;">
+        <div style="font-size:12px; opacity:.8;">This week</div>
+        <div id="cardWeek" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
+        <div style="font-size:12px; opacity:.7; margin-top:6px;">Mon → today</div>
+      </div>
+
+      <div class="wl-card wl-panel" style="padding:14px;">
+        <div style="font-size:12px; opacity:.8;">Next shift</div>
+        <div id="cardNextTitle" style="font-weight:900; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</div>
+        <div id="cardNextMeta" style="font-size:12px; opacity:.75; margin-top:6px;">—</div>
+        <div id="cardNextBadge" style="margin-top:8px;"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
       <div>
         <div style="font-weight:900;">Today</div>
@@ -87,6 +112,12 @@ const todayBodyEl = document.querySelector("#todayBody");
 const upcomingListEl = document.querySelector("#upcomingList");
 const earningsBoxEl = document.querySelector("#earningsBox");
 const recentEarningsEl = document.querySelector("#recentEarnings");
+const cardBalanceEl = document.querySelector("#cardBalance");
+const cardWeekEl = document.querySelector("#cardWeek");
+const cardNextTitleEl = document.querySelector("#cardNextTitle");
+const cardNextMetaEl = document.querySelector("#cardNextMeta");
+const cardNextBadgeEl = document.querySelector("#cardNextBadge");
+
 
 try {
   const session = await getSession();
@@ -95,11 +126,15 @@ try {
 
   const upcoming = await loadUpcomingAssignedShifts({ days: 14 });
   const active = await getActiveClockedInShift({ userId });
-
+  
+  renderTopCardsNextShift({ upcoming });
+  
   renderToday({ upcoming, active });
   renderUpcoming(upcoming);
+  
 
   await renderLedgerEarnings({ userId });
+  
 } catch (err) {
   console.error(err);
   todaySubEl.textContent = "Could not load dashboard.";
@@ -220,6 +255,33 @@ function renderToday({ upcoming, active }) {
     return;
   }
 
+  function renderTopCardsNextShift({ upcoming }) {
+  const now = new Date();
+  const nextShift =
+    upcoming.find((s) => shiftStartMs(s) >= now.getTime()) ||
+    upcoming.find((s) => shiftStartMs(s) >= 0) ||
+    null;
+
+  if (!nextShift) {
+    cardNextTitleEl.textContent = "No upcoming shifts";
+    cardNextMetaEl.textContent = "—";
+    cardNextBadgeEl.innerHTML = "";
+    return;
+  }
+
+  const when = formatWhenLabel(nextShift.shift_date);
+  const time = `${String(nextShift.start_at || "").slice(0, 5)} → ${String(nextShift.end_at || "").slice(0, 5)}`;
+  const loc = nextShift.location ? ` • ${nextShift.location}` : "";
+  const needsTracking = nextShift.track_time === false ? false : true;
+
+  cardNextTitleEl.textContent = nextShift.title || "Upcoming shift";
+  cardNextMetaEl.textContent = `${when} • ${time}${loc}`;
+
+  cardNextBadgeEl.innerHTML = needsTracking
+    ? `<span class="wl-badge wl-badge--active">Tracking required</span>`
+    : `<span class="wl-badge wl-badge--draft">No tracking required</span>`;
+}
+  
   todayPillEl.innerHTML = `<span class="wl-badge wl-badge--draft">Not clocked in</span>`;
 
   if (!nextShift) {
@@ -323,6 +385,9 @@ async function renderLedgerEarnings({ userId }) {
     sumLedger({ userId, from: monthStart, to: now }),
     sumLedger({ userId, from: null, to: null }),
   ]);
+  
+cardWeekEl.textContent = fmtMoney(weekTotal);
+cardBalanceEl.textContent = fmtMoney(allTimeTotal);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
