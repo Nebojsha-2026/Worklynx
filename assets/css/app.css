@@ -111,3 +111,22 @@ input, select {
 .kpi .pill { border: 1px solid var(--border); padding: 8px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); color: var(--muted); }
 
 .actions { display:flex; gap: 12px; flex-wrap: wrap; }
+
+/* Center content area nicely */
+#wlContent {
+  width: 100%;
+}
+
+#wlContent .wl-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Prevent the two-column row from stretching panels to equal height */
+.wl-form__row--top {
+  align-items: start;
+}
+
+.wl-form__row--top > section {
+  align-self: start;
+}
