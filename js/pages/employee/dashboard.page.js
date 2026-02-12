@@ -225,10 +225,7 @@ async function getActiveClockedInShift({ userId }) {
 
  function renderTopCardsNextShift({ upcoming }) {
   const now = new Date();
-  const nextShift =
-    upcoming.find((s) => shiftStartMs(s) >= now.getTime()) ||
-    upcoming.find((s) => shiftStartMs(s) >= 0) ||
-    null;
+  const nextShift = upcoming.find((s) => shiftStartMs(s) >= now.getTime()) || null;
 
   if (!nextShift) {
     cardNextTitleEl.textContent = "No upcoming shifts";
