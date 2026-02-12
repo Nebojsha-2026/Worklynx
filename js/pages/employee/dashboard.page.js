@@ -1,4 +1,4 @@
-// js/pages/employee.dashboard.page.js
+// js/pages/employee/dashboard.page.js
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
@@ -7,7 +7,6 @@ import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
 import { getSession } from "../../core/session.js";
-
 import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
 
 await requireRole(["EMPLOYEE"]);
@@ -40,7 +39,7 @@ content.innerHTML = `
     <div>
       <h1 style="margin:0;">Dashboard</h1>
       <div style="font-size:13px; opacity:.8; margin-top:6px;">
-        Your shifts, time tracking, and estimated earnings.
+        Your shifts, time tracking, and earnings.
       </div>
     </div>
     <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
@@ -50,33 +49,33 @@ content.innerHTML = `
     <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
       <div>
         <div style="font-weight:900;">Today</div>
-        <div style="font-size:13px; opacity:.8; margin-top:4px;" id="todaySub">
-          Loading…
-        </div>
+        <div style="font-size:13px; opacity:.8; margin-top:4px;" id="todaySub">Loading…</div>
       </div>
       <div id="todayPill"></div>
     </div>
-
     <div id="todayBody" style="margin-top:12px;"></div>
   </section>
 
   <div class="wl-form__row" style="margin-top:12px;">
     <section class="wl-card wl-panel">
       <div style="font-weight:900;">Upcoming shifts</div>
-      <div style="font-size:13px; opacity:.8; margin-top:6px;">
-        Next 14 days
-      </div>
+      <div style="font-size:13px; opacity:.8; margin-top:6px;">Next 14 days</div>
       <div id="upcomingList" style="display:grid; gap:10px; margin-top:12px;"></div>
     </section>
 
     <section class="wl-card wl-panel">
-      <div style="font-weight:900;">Earnings snapshot</div>
+      <div style="font-weight:900;">Earnings</div>
       <div style="font-size:13px; opacity:.8; margin-top:6px;">
-        Estimated totals (safe if data missing)
+        Based on the ledger (posted after clock-out or shift end).
       </div>
 
       <div id="earningsBox" style="margin-top:12px;">
         <div style="opacity:.85;">Loading…</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div style="font-weight:900;">Recent earnings</div>
+        <div id="recentEarnings" style="display:grid; gap:10px; margin-top:10px;"></div>
       </div>
     </section>
   </div>
@@ -87,26 +86,20 @@ const todayPillEl = document.querySelector("#todayPill");
 const todayBodyEl = document.querySelector("#todayBody");
 const upcomingListEl = document.querySelector("#upcomingList");
 const earningsBoxEl = document.querySelector("#earningsBox");
+const recentEarningsEl = document.querySelector("#recentEarnings");
 
 try {
   const session = await getSession();
   const userId = session?.user?.id;
   if (!userId) throw new Error("Not authenticated.");
 
-  // 1) Load upcoming shifts assigned to this employee
   const upcoming = await loadUpcomingAssignedShifts({ days: 14 });
-
-  // 2) Detect open time entry (clocked in) + related shift
   const active = await getActiveClockedInShift({ userId });
 
-  // 3) Render top strip
   renderToday({ upcoming, active });
-
-  // 4) Render upcoming list
   renderUpcoming(upcoming);
 
-  // 5) Earnings snapshot (best-effort)
-  await renderEarningsSnapshot({ userId, upcoming });
+  await renderLedgerEarnings({ userId });
 } catch (err) {
   console.error(err);
   todaySubEl.textContent = "Could not load dashboard.";
@@ -114,6 +107,7 @@ try {
   todayBodyEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err?.message || "")}</div>`;
   upcomingListEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load shifts.</div>`;
   earningsBoxEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load earnings.</div>`;
+  recentEarningsEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load recent earnings.</div>`;
 }
 
 /* --------------------------
@@ -121,14 +115,13 @@ try {
 --------------------------- */
 
 async function loadUpcomingAssignedShifts({ days }) {
-  const assigns = await listMyShiftAssignments(); // [{ shift_id, ... }]
+  const assigns = await listMyShiftAssignments(); // expects [{ shift_id, ... }]
   const ids = (assigns || []).map((a) => a.shift_id).filter(Boolean);
   if (!ids.length) return [];
 
   const now = new Date();
   const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-  // We'll fetch shifts by ids, then filter in JS (simple, safe)
   const { data: shifts, error } = await supabase
     .from("shifts")
     .select("*")
@@ -137,24 +130,15 @@ async function loadUpcomingAssignedShifts({ days }) {
 
   if (error) throw error;
 
-  const list = (shifts || [])
+  return (shifts || [])
     .filter((s) => {
       const start = shiftStartMs(s);
-      const within = Number.isFinite(start) && start <= end.getTime();
-      return within;
+      return Number.isFinite(start) && start <= end.getTime();
     })
     .sort((a, b) => shiftStartMs(a) - shiftStartMs(b));
-
-  return list;
 }
 
-// Best-effort open clocked-in shift detector.
-// If your DB relations differ, this returns null (dashboard still works).
 async function getActiveClockedInShift({ userId }) {
-  // Strategy:
-  // A) Try a join: time_entries -> timesheets (employee_user_id, shift_id) -> shifts
-  // B) If join fails, return null safely.
-
   try {
     const { data: rows, error } = await supabase
       .from("time_entries")
@@ -289,14 +273,9 @@ function renderToday({ upcoming, active }) {
 
 function renderUpcoming(shifts) {
   if (!shifts.length) {
-    upcomingListEl.innerHTML = `
-      <div class="wl-alert" style="opacity:.95;">
-        No shifts to show.
-      </div>
-    `;
+    upcomingListEl.innerHTML = `<div class="wl-alert" style="opacity:.95;">No shifts to show.</div>`;
     return;
   }
-
   upcomingListEl.innerHTML = shifts.slice(0, 10).map(renderShiftCard).join("");
 }
 
@@ -318,13 +297,7 @@ function renderShiftCard(s) {
             <b>${escapeHtml(when)}</b> • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
             ${s.location ? ` • 📍 ${escapeHtml(s.location)}` : ""}
           </div>
-          ${
-            needsTracking
-              ? ""
-              : `<div style="font-size:13px; opacity:.85; margin-top:6px;">
-                   No tracking required
-                 </div>`
-          }
+          ${needsTracking ? "" : `<div style="font-size:13px; opacity:.85; margin-top:6px;">No tracking required</div>`}
         </div>
 
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex:0 0 auto;">
@@ -337,118 +310,117 @@ function renderShiftCard(s) {
 }
 
 /* --------------------------
-   Earnings snapshot (best-effort)
+   Earnings (Ledger-based)
 --------------------------- */
 
-async function renderEarningsSnapshot({ userId }) {
-  // Safe placeholders if we can't compute yet
-  let week = null;
-  let month = null;
+async function renderLedgerEarnings({ userId }) {
+  const now = new Date();
+  const weekStart = startOfWeek(now);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  try {
-    // Try to compute using completed time_entries joined to timesheets.
-    // If your schema differs, this will throw and we’ll show placeholders.
-    const now = new Date();
-    const weekStart = startOfWeek(now);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    week = await computeEstimatedEarnings({ userId, from: weekStart, to: now });
-    month = await computeEstimatedEarnings({ userId, from: monthStart, to: now });
-  } catch (e) {
-    console.warn("Earnings snapshot not available yet (safe to ignore):", e);
-  }
+  const [weekTotal, monthTotal, allTimeTotal] = await Promise.all([
+    sumLedger({ userId, from: weekStart, to: now }),
+    sumLedger({ userId, from: monthStart, to: now }),
+    sumLedger({ userId, from: null, to: null }),
+  ]);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
       <div style="display:grid; gap:10px;">
         <div style="display:flex; justify-content:space-between; gap:10px;">
           <div style="opacity:.85;">This week</div>
-          <div style="font-weight:900;">${week ? escapeHtml(week) : "—"}</div>
+          <div style="font-weight:900;">${escapeHtml(fmtMoney(weekTotal))}</div>
         </div>
         <div style="display:flex; justify-content:space-between; gap:10px;">
           <div style="opacity:.85;">This month</div>
-          <div style="font-weight:900;">${month ? escapeHtml(month) : "—"}</div>
+          <div style="font-weight:900;">${escapeHtml(fmtMoney(monthTotal))}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; gap:10px;">
+          <div style="opacity:.85;">All time</div>
+          <div style="font-weight:900;">${escapeHtml(fmtMoney(allTimeTotal))}</div>
         </div>
 
         <div style="font-size:12px; opacity:.75;">
-          Scheduled pay is used where tracking is not required.
-          Clocked pay is used where tracking is required and completed.
+          Earnings are posted after clock-out (tracked shifts) or after shift end (no-tracking shifts).
+          If a no-tracking shift ended recently, it may take a few minutes to appear.
         </div>
       </div>
     </div>
   `;
-}
 
-async function computeEstimatedEarnings({ userId, from, to }) {
-  // Completed entries during range, join to timesheets for employee + shift_id,
-  // then fetch shifts to get hourly_rate + break_is_paid + track_time.
-  const fromIso = from.toISOString();
-  const toIso = to.toISOString();
+  const recent = await fetchRecentLedger({ userId, limit: 6 });
 
-  const { data: entries, error } = await supabase
-    .from("time_entries")
-    .select(
-      `
-      id,
-      timesheet_id,
-      clock_in,
-      clock_out,
-      break_minutes,
-      timesheets!inner(
-        id,
-        employee_user_id,
-        shift_id
-      )
-    `
-    )
-    .not("clock_out", "is", null)
-    .gte("clock_in", fromIso)
-    .lte("clock_in", toIso)
-    .eq("timesheets.employee_user_id", userId)
-    .limit(500);
-
-  if (error) throw error;
-
-  const shiftIds = Array.from(new Set((entries || []).map((e) => e.timesheets?.shift_id).filter(Boolean)));
-  if (!shiftIds.length) return "$0.00";
-
-  const { data: shifts, error: sErr } = await supabase
-    .from("shifts")
-    .select("id, hourly_rate, break_is_paid, track_time")
-    .in("id", shiftIds)
-    .limit(500);
-
-  if (sErr) throw sErr;
-
-  const shiftById = new Map((shifts || []).map((s) => [s.id, s]));
-
-  let total = 0;
-
-  for (const e of entries || []) {
-    const sid = e.timesheets?.shift_id;
-    const s = sid ? shiftById.get(sid) : null;
-    if (!s) continue;
-
-    const hr = s.hourly_rate != null ? Number(s.hourly_rate) : null;
-    if (!Number.isFinite(hr) || hr <= 0) continue;
-
-    const breakIsPaid = !!s.break_is_paid;
-
-    const totals = calcTotals({
-      clockIn: e.clock_in,
-      clockOut: e.clock_out,
-      breakMinutes: Number(e.break_minutes || 0),
-      breakIsPaid,
-      hourlyRate: hr,
-    });
-
-    if (!totals) continue;
-
-    const pay = Number(totals.payNumber || 0);
-    if (Number.isFinite(pay)) total += pay;
+  if (!recent.length) {
+    recentEarningsEl.innerHTML = `<div class="wl-alert" style="opacity:.95;">No earnings posted yet.</div>`;
+    return;
   }
 
-  return `$${total.toFixed(2)}`;
+  recentEarningsEl.innerHTML = recent.map(renderEarningRow).join("");
+}
+
+async function sumLedger({ userId, from, to }) {
+  let q = supabase
+    .from("earnings")
+    .select("amount, earned_at")
+    .eq("employee_user_id", userId)
+    .limit(1000);
+
+  if (from) q = q.gte("earned_at", from.toISOString());
+  if (to) q = q.lte("earned_at", to.toISOString());
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  const total = (data || []).reduce((acc, r) => acc + Number(r.amount || 0), 0);
+  return total;
+}
+
+async function fetchRecentLedger({ userId, limit }) {
+  const { data, error } = await supabase
+    .from("earnings")
+    .select("id, amount, source, minutes_paid, earned_at, shift:shifts(title, shift_date, start_at, end_at)")
+    .eq("employee_user_id", userId)
+    .order("earned_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+
+function renderEarningRow(r) {
+  const s = r.shift || {};
+  const title = s.title || "Shift";
+  const when = s.shift_date ? formatWhenLabel(s.shift_date) : "";
+  const time = s.start_at && s.end_at ? `${String(s.start_at).slice(0,5)} → ${String(s.end_at).slice(0,5)}` : "";
+
+  const badge =
+    r.source === "SCHEDULED"
+      ? `<span class="wl-badge wl-badge--draft">Scheduled</span>`
+      : `<span class="wl-badge wl-badge--active">Clocked</span>`;
+
+  return `
+    <div class="wl-card wl-panel" style="padding:12px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+        <div style="min-width:0;">
+          <div style="font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${escapeHtml(title)}
+          </div>
+          <div style="opacity:.85; font-size:13px; margin-top:6px;">
+            ${when ? `<b>${escapeHtml(when)}</b> • ` : ""}${escapeHtml(time)}
+          </div>
+          <div style="opacity:.8; font-size:12px; margin-top:6px;">
+            Paid minutes: <b>${escapeHtml(String(r.minutes_paid ?? 0))}</b> • Earned: ${escapeHtml(
+              r.earned_at ? new Date(r.earned_at).toLocaleString() : ""
+            )}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+          ${badge}
+          <div style="font-weight:900;">${escapeHtml(fmtMoney(Number(r.amount || 0)))}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 /* --------------------------
@@ -456,7 +428,6 @@ async function computeEstimatedEarnings({ userId, from, to }) {
 --------------------------- */
 
 function shiftStartMs(s) {
-  // Uses shift_date + start_at (TIME), local time.
   if (!s?.shift_date || !s?.start_at) return NaN;
   return new Date(`${s.shift_date}T${String(s.start_at).slice(0, 8)}`).getTime();
 }
@@ -471,56 +442,10 @@ function isoDate(d) {
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = x.getDay(); // 0 Sun
-  const diff = (day + 6) % 7; // Monday as start
+  const diff = (day + 6) % 7; // Monday
   x.setDate(x.getDate() - diff);
   x.setHours(0, 0, 0, 0);
   return x;
-}
-
-function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }) {
-  if (!clockIn || !clockOut) return null;
-
-  const start = new Date(clockIn).getTime();
-  const end = new Date(clockOut).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-
-  const diffMs = end - start;
-  const totalWorkedMins = Math.max(1, Math.round(diffMs / 60000));
-
-  const b = Math.max(0, Number(breakMinutes || 0));
-  const paidMinsRaw = breakIsPaid ? totalWorkedMins : Math.max(0, totalWorkedMins - b);
-
-  const paidMinsRounded = roundForPay(paidMinsRaw);
-
-  const pay =
-    Number.isFinite(hourlyRate) && hourlyRate != null
-      ? (paidMinsRounded / 60) * Number(hourlyRate)
-      : 0;
-
-  return {
-    workedMins: totalWorkedMins,
-    paidMinsRaw,
-    paidMinsRounded,
-    payNumber: pay,
-  };
-
-  // 0–19 -> 0
-  // 20–44 -> 30
-  // 45–? -> 60 (and so on using 30-min blocks for remainder)
-  function roundForPay(mins) {
-    if (!mins || mins <= 0) return 0;
-    if (mins <= 19) return 0;
-
-    const hours = Math.floor(mins / 60);
-    const rem = mins % 60;
-
-    let roundedRem = 0;
-    if (rem <= 19) roundedRem = 0;
-    else if (rem <= 44) roundedRem = 30;
-    else roundedRem = 60;
-
-    return hours * 60 + roundedRem;
-  }
 }
 
 function renderStatusBadge(status) {
@@ -549,6 +474,11 @@ function formatWhenLabel(yyyyMmDd) {
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Tomorrow";
   return String(yyyyMmDd);
+}
+
+function fmtMoney(n) {
+  const x = Number(n || 0);
+  return `$${x.toFixed(2)}`;
 }
 
 function escapeHtml(str) {
