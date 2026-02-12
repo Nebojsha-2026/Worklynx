@@ -34,73 +34,66 @@ main.innerHTML = `
 main.querySelector("#wlSidebar").append(renderSidebar("EMPLOYEE"));
 
 const content = main.querySelector("#wlContent");
+
+// NOTE: Added wl-page container so we can center content cleanly with CSS.
 content.innerHTML = `
-  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <div>
-      <h1 style="margin:0;">Dashboard</h1>
-      <div style="font-size:13px; opacity:.8; margin-top:6px;">
-        Your shifts, time tracking, and earnings.
-      </div>
-    </div>
-    <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
-  </div>
-
-  <section class="wl-card wl-panel" style="margin-top:12px;">
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
-        <div style="font-size:12px; opacity:.8;">Available balance</div>
-        <div id="cardBalance" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
-        <div style="font-size:12px; opacity:.7; margin-top:6px;">From posted earnings</div>
-      </div>
-
-      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
-        <div style="font-size:12px; opacity:.8;">This week</div>
-        <div id="cardWeek" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
-        <div style="font-size:12px; opacity:.7; margin-top:6px;">Mon → today</div>
-      </div>
-
-      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
-        <div style="font-size:12px; opacity:.8;">Next shift</div>
-        <div id="cardNextTitle" style="font-weight:900; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</div>
-        <div id="cardNextMeta" style="font-size:12px; opacity:.75; margin-top:6px;">—</div>
-        <div id="cardNextBadge" style="margin-top:8px;"></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="wl-card wl-panel" style="margin-top:12px;">
-    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+  <div class="wl-page">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;">
       <div>
-        <div style="font-weight:900;">Today</div>
-        <div style="font-size:13px; opacity:.8; margin-top:4px;" id="todaySub">Loading…</div>
+        <h1 style="margin:0;">Dashboard</h1>
+        <div style="font-size:13px; opacity:.8; margin-top:6px;">
+          Your shifts, time tracking, and earnings.
+        </div>
       </div>
-      <div id="todayPill"></div>
+      <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
     </div>
-    <div id="todayBody" style="margin-top:12px;"></div>
-  </section>
 
-  <div class="wl-form__row" style="margin-top:12px;">
-    <section class="wl-card wl-panel">
-      <div style="font-weight:900;">Upcoming shifts</div>
-      <div style="font-size:13px; opacity:.8; margin-top:6px;">Next 14 days</div>
-      <div id="upcomingList" style="display:grid; gap:10px; margin-top:12px;"></div>
-    </section>
-
-    <section class="wl-card wl-panel">
-      <div style="font-weight:900;">Earnings</div>
-      <div style="font-size:13px; opacity:.8; margin-top:6px;">
-        Based on the ledger (posted after clock-out or shift end).
-      </div>
-
-      <div id="earningsBox" style="margin-top:12px;">
-        <div style="opacity:.85;">Loading…</div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div style="font-weight:900;">Recent earnings</div>
-        <div id="recentEarnings" style="display:grid; gap:10px; margin-top:10px;"></div>
+    <!-- TOP SUMMARY: keep only This Week -->
+    <section class="wl-card wl-panel" style="margin-top:12px;">
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+        <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
+          <div style="font-size:12px; opacity:.8;">This week</div>
+          <div id="cardWeek" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
+          <div style="font-size:12px; opacity:.7; margin-top:6px;">Mon → today</div>
+        </div>
       </div>
     </section>
+
+    <!-- TODAY (this is enough; no need Next shift card above) -->
+    <section class="wl-card wl-panel" style="margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+        <div>
+          <div style="font-weight:900;">Today</div>
+          <div style="font-size:13px; opacity:.8; margin-top:4px;" id="todaySub">Loading…</div>
+        </div>
+        <div id="todayPill"></div>
+      </div>
+      <div id="todayBody" style="margin-top:12px;"></div>
+    </section>
+
+    <div class="wl-form__row wl-form__row--top" style="margin-top:12px;">
+      <section class="wl-card wl-panel">
+        <div style="font-weight:900;">Upcoming shifts</div>
+        <div style="font-size:13px; opacity:.8; margin-top:6px;">Next 14 days</div>
+        <div id="upcomingList" style="display:grid; gap:10px; margin-top:12px;"></div>
+      </section>
+
+      <section class="wl-card wl-panel">
+        <div style="font-weight:900;">Earnings</div>
+        <div style="font-size:13px; opacity:.8; margin-top:6px;">
+          Based on the ledger (posted after clock-out or shift end).
+        </div>
+
+        <div id="earningsBox" style="margin-top:12px;">
+          <div style="opacity:.85;">Loading…</div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div style="font-weight:900;">Recent earnings</div>
+          <div id="recentEarnings" style="display:grid; gap:10px; margin-top:10px;"></div>
+        </div>
+      </section>
+    </div>
   </div>
 `;
 
@@ -110,11 +103,7 @@ const todayBodyEl = document.querySelector("#todayBody");
 const upcomingListEl = document.querySelector("#upcomingList");
 const earningsBoxEl = document.querySelector("#earningsBox");
 const recentEarningsEl = document.querySelector("#recentEarnings");
-const cardBalanceEl = document.querySelector("#cardBalance");
 const cardWeekEl = document.querySelector("#cardWeek");
-const cardNextTitleEl = document.querySelector("#cardNextTitle");
-const cardNextMetaEl = document.querySelector("#cardNextMeta");
-const cardNextBadgeEl = document.querySelector("#cardNextBadge");
 
 try {
   const session = await getSession();
@@ -124,7 +113,6 @@ try {
   const upcoming = await loadUpcomingAssignedShifts({ days: 14 });
   const active = await getActiveClockedInShift({ userId });
 
-  renderTopCardsNextShift({ upcoming });
   renderToday({ upcoming, active });
   renderUpcoming(upcoming);
 
@@ -150,6 +138,7 @@ async function loadUpcomingAssignedShifts({ days }) {
 
   const now = new Date();
   const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+  const dayStart = startOfDay(now).getTime();
 
   const { data: shifts, error } = await supabase
     .from("shifts")
@@ -158,8 +147,6 @@ async function loadUpcomingAssignedShifts({ days }) {
     .limit(500);
 
   if (error) throw error;
-
-  const dayStart = startOfDay(now).getTime();
 
   return (shifts || [])
     .filter((s) => {
@@ -219,30 +206,6 @@ async function getActiveClockedInShift({ userId }) {
    Render
 --------------------------- */
 
-function renderTopCardsNextShift({ upcoming }) {
-  const now = new Date();
-  const nextShift = upcoming.find((s) => shiftStartMs(s) >= now.getTime()) || null;
-
-  if (!nextShift) {
-    cardNextTitleEl.textContent = "No upcoming shifts";
-    cardNextMetaEl.textContent = "—";
-    cardNextBadgeEl.innerHTML = "";
-    return;
-  }
-
-  const when = formatWhenLabel(nextShift.shift_date);
-  const time = `${fmtTime(nextShift.start_at)} → ${fmtTime(nextShift.end_at)}`;
-  const loc = nextShift.location ? ` • ${nextShift.location}` : "";
-  const needsTracking = nextShift.track_time === false ? false : true;
-
-  cardNextTitleEl.textContent = nextShift.title || "Upcoming shift";
-  cardNextMetaEl.textContent = `${when} • ${time}${loc}`;
-
-  cardNextBadgeEl.innerHTML = needsTracking
-    ? `<span class="wl-badge wl-badge--active">Tracking required</span>`
-    : `<span class="wl-badge wl-badge--draft">No tracking required</span>`;
-}
-
 function renderToday({ upcoming, active }) {
   const now = new Date();
   const today = isoDate(now);
@@ -255,7 +218,9 @@ function renderToday({ upcoming, active }) {
     todaySubEl.textContent = "You are currently clocked in.";
     todayPillEl.innerHTML = `<span class="wl-badge wl-badge--active">Clocked in</span>`;
 
-    const since = active.timeEntry?.clock_in ? new Date(active.timeEntry.clock_in).toLocaleString() : "";
+    const since = active.timeEntry?.clock_in
+      ? new Date(active.timeEntry.clock_in).toLocaleString()
+      : "";
 
     todayBodyEl.innerHTML = `
       <div class="wl-alert">
@@ -299,7 +264,7 @@ function renderToday({ upcoming, active }) {
         <div style="min-width:0;">
           <div style="font-weight:900;">${escapeHtml(nextShift.title || "Upcoming shift")}</div>
           <div style="font-size:13px; opacity:.85; margin-top:6px;">
-            <b>${escapeHtml(when)}</b> • ${escapeHtml(fmtTime(nextShift.start_at))} → ${escapeHtml(fmtTime(nextShift.end_at))}
+            <b>${escapeHtml(when)}</b> • ${escapeHtml(nextShift.start_at || "")} → ${escapeHtml(nextShift.end_at || "")}
             ${escapeHtml(loc)}
           </div>
           ${
@@ -326,7 +291,14 @@ function renderToday({ upcoming, active }) {
 
 function renderUpcoming(shifts) {
   if (!shifts.length) {
-    upcomingListEl.innerHTML = `<div class="wl-alert" style="opacity:.95;">No shifts to show.</div>`;
+    upcomingListEl.innerHTML = `
+      <div class="wl-alert" style="opacity:.95;">
+        No upcoming shifts.
+      </div>
+      <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
+        View all shifts →
+      </a>
+    `;
     return;
   }
 
@@ -337,10 +309,12 @@ function renderUpcoming(shifts) {
     ${slice.map(renderShiftCard).join("")}
     ${
       shifts.length > max
-        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; width:fit-content;">
+        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
              See more shifts →
            </a>`
-        : ""
+        : `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
+             View all shifts →
+           </a>`
     }
   `;
 }
@@ -360,7 +334,7 @@ function renderShiftCard(s) {
             ${escapeHtml(s.title || "Untitled shift")}
           </div>
           <div style="opacity:.85; font-size:13px; margin-top:6px;">
-            <b>${escapeHtml(when)}</b> • ${escapeHtml(fmtTime(s.start_at))} → ${escapeHtml(fmtTime(s.end_at))}
+            <b>${escapeHtml(when)}</b> • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
             ${s.location ? ` • 📍 ${escapeHtml(s.location)}` : ""}
           </div>
           ${needsTracking ? "" : `<div style="font-size:13px; opacity:.85; margin-top:6px;">No tracking required</div>`}
@@ -390,8 +364,8 @@ async function renderLedgerEarnings({ userId }) {
     sumLedger({ userId, from: null, to: null }),
   ]);
 
+  // update top card
   cardWeekEl.textContent = fmtMoney(weekTotal);
-  cardBalanceEl.textContent = fmtMoney(allTimeTotal);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
@@ -459,7 +433,7 @@ function renderEarningRow(r) {
   const s = r.shift || {};
   const title = s.title || "Shift";
   const when = s.shift_date ? formatWhenLabel(s.shift_date) : "";
-  const time = s.start_at && s.end_at ? `${fmtTime(s.start_at)} → ${fmtTime(s.end_at)}` : "";
+  const time = s.start_at && s.end_at ? `${String(s.start_at).slice(0, 5)} → ${String(s.end_at).slice(0, 5)}` : "";
 
   const badge =
     r.source === "SCHEDULED"
@@ -504,10 +478,6 @@ function startOfDay(d) {
 function shiftStartMs(s) {
   if (!s?.shift_date || !s?.start_at) return NaN;
   return new Date(`${s.shift_date}T${String(s.start_at).slice(0, 8)}`).getTime();
-}
-
-function fmtTime(t) {
-  return String(t || "").slice(0, 5); // "18:00:00" -> "18:00"
 }
 
 function isoDate(d) {
