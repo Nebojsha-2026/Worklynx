@@ -165,11 +165,13 @@ async function loadUpcomingAssignedShifts({ days }) {
 
   if (error) throw error;
 
-  return (shifts || [])
-    .filter((s) => {
-      const start = shiftStartMs(s);
-      return Number.isFinite(start) && start <= end.getTime();
-    })
+  const dayStart = startOfDay(now).getTime();
+
+return (shifts || [])
+  .filter((s) => {
+    const start = shiftStartMs(s);
+    return Number.isFinite(start) && start >= dayStart && start <= end.getTime();
+  })
     .sort((a, b) => shiftStartMs(a) - shiftStartMs(b));
 }
 
@@ -335,7 +337,20 @@ function renderUpcoming(shifts) {
     upcomingListEl.innerHTML = `<div class="wl-alert" style="opacity:.95;">No shifts to show.</div>`;
     return;
   }
-  upcomingListEl.innerHTML = shifts.slice(0, 10).map(renderShiftCard).join("");
+
+  const max = 4;
+  const slice = shifts.slice(0, max);
+
+  upcomingListEl.innerHTML = `
+    ${slice.map(renderShiftCard).join("")}
+    ${
+      shifts.length > max
+        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
+             See more shifts →
+           </a>`
+        : ""
+    }
+  `;
 }
 
 function renderShiftCard(s) {
@@ -488,6 +503,11 @@ function renderEarningRow(r) {
 /* --------------------------
    Shared helpers
 --------------------------- */
+function startOfDay(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
 
 function shiftStartMs(s) {
   if (!s?.shift_date || !s?.start_at) return NaN;
