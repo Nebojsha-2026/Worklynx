@@ -71,13 +71,18 @@ const shiftBreakMinutes = Number(shift.break_minutes || 0);
 const breakIsPaid = !!shift.break_is_paid;
 const hourlyRate = shift.hourly_rate != null ? Number(shift.hourly_rate) : null;
 
-// ✅ NEW: track time flag (default true if missing)
+// Track time flag (default true if missing)
 const trackTime = shift.track_time !== false;
 
 const breakSummary =
   shiftBreakMinutes > 0
     ? `${shiftBreakMinutes} min (${breakIsPaid ? "paid" : "unpaid"})`
     : "No break";
+
+const endDateLabel =
+  shift.end_date && String(shift.end_date) !== String(shift.shift_date)
+    ? `${escapeHtml(String(shift.shift_date))} ${escapeHtml(String(shift.start_at || ""))} → ${escapeHtml(String(shift.end_date))} ${escapeHtml(String(shift.end_at || ""))}`
+    : `${escapeHtml(String(shift.start_at || ""))} → ${escapeHtml(String(shift.end_at || ""))}`;
 
 content.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -88,7 +93,7 @@ content.innerHTML = `
 
       <div style="margin-top:8px; font-size:13px; opacity:.85;">
         <b>${escapeHtml(whenLabel)}</b>
-        • ${escapeHtml(shift.start_at || "")} → ${escapeHtml(shift.end_at || "")}
+        • ${endDateLabel}
         ${shift.location ? ` • 📍 ${escapeHtml(shift.location)}` : ""}
       </div>
     </div>
@@ -116,8 +121,9 @@ content.innerHTML = `
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:grid; gap:10px;">
-      <div><b>Date:</b> ${escapeHtml(shift.shift_date || "")}</div>
-      <div><b>Time:</b> ${escapeHtml(shift.start_at || "")} → ${escapeHtml(shift.end_at || "")}</div>
+      <div><b>Start date:</b> ${escapeHtml(shift.shift_date || "")}</div>
+      <div><b>End date:</b> ${escapeHtml(shift.end_date || shift.shift_date || "")}</div>
+      <div><b>Time:</b> ${endDateLabel}</div>
       ${
         hourlyRate != null
           ? `<div><b>Rate:</b> ${escapeHtml(String(hourlyRate))} / hr</div>`
@@ -201,20 +207,31 @@ try {
       ? new Date(breakState.startedAt).toLocaleTimeString()
       : null;
 
-    const totals = calcTotals({
-      clockIn: effectiveEntry?.clock_in,
-      clockOut: effectiveEntry?.clock_out,
-      breakMinutes: breakMins,
-      breakIsPaid,
-      hourlyRate,
-    });
+    // ✅ MAIN CHANGE:
+    // If tracking NOT required -> show scheduled totals & pay, NOT clocked totals.
+    const totals = trackTime
+      ? calcTotals({
+          clockIn: effectiveEntry?.clock_in,
+          clockOut: effectiveEntry?.clock_out,
+          breakMinutes: breakMins,
+          breakIsPaid,
+          hourlyRate,
+        })
+      : calcScheduledTotals({
+          shift_date: shift.shift_date,
+          end_date: shift.end_date || shift.shift_date,
+          start_at: shift.start_at,
+          end_at: shift.end_at,
+          breakMinutes: shiftBreakMinutes,
+          breakIsPaid,
+          hourlyRate,
+        });
 
-    // ✅ NEW: show banner when tracking is not required
     const noTrackingBanner = !trackTime
       ? `<div class="wl-alert" style="opacity:.95;">
            <b>No tracking required for this shift.</b><br/>
            <span style="opacity:.85; font-size:13px;">
-             You can still clock in/out (optional), but pay may be based on the scheduled shift.
+             Pay is based on the scheduled shift hours. You can still clock in/out (optional).
            </span>
          </div>`
       : "";
@@ -227,12 +244,14 @@ try {
         ${
           totals
             ? `<div class="wl-alert wl-alert--success">
-                 <div><b>Total worked:</b> ${escapeHtml(totals.workedLabel)}</div>
+                 <div><b>${trackTime ? "Total worked:" : "Scheduled hours:"}</b> ${escapeHtml(
+                   totals.workedLabel
+                 )}</div>
                  ${
                    totals.payLabel
-                     ? `<div style="margin-top:6px;"><b>Estimated pay:</b> ${escapeHtml(
-                         totals.payLabel
-                       )}</div>`
+                     ? `<div style="margin-top:6px;"><b>${
+                         trackTime ? "Estimated pay:" : "Scheduled pay:"
+                       }</b> ${escapeHtml(totals.payLabel)}</div>`
                      : ""
                  }
                  <div style="font-size:13px; opacity:.85; margin-top:6px;">
@@ -249,7 +268,7 @@ try {
             ? `<div class="wl-alert">
                  ✅ You are clocked in.<br/>
                  <span style="opacity:.85; font-size:13px;">Started: ${escapeHtml(clockedInAt)}</span><br/>
-                 <span style="opacity:.85; font-size:13px;">Break minutes: <b>${breakMins}</b></span>
+                 <span style="opacity:.85; font-size:13px;">Break minutes (logged): <b>${breakMins}</b></span>
                </div>`
             : `<div style="opacity:.9;">You are not clocked in.</div>`
         }
@@ -486,6 +505,12 @@ async function getLatestTimeEntry({ timesheetId }) {
   return (data && data[0]) || null;
 }
 
+function dtMs(dateStr, timeStr) {
+  // dateStr: YYYY-MM-DD, timeStr: HH:MM:SS
+  return new Date(`${dateStr}T${timeStr}`).getTime();
+}
+
+// When tracking is required (clocked totals)
 function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }) {
   if (!clockIn || !clockOut) return null;
 
@@ -498,21 +523,6 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
 
   const b = Math.max(0, Number(breakMinutes || 0));
   const paidMinsRaw = breakIsPaid ? totalWorkedMins : Math.max(0, totalWorkedMins - b);
-
-  function roundForPay(mins) {
-    if (!mins || mins <= 0) return 0;
-    if (mins <= 19) return 0;
-
-    const hours = Math.floor(mins / 60);
-    const rem = mins % 60;
-
-    let roundedRem = 0;
-    if (rem <= 19) roundedRem = 0;
-    else if (rem <= 44) roundedRem = 30;
-    else roundedRem = 60;
-
-    return hours * 60 + roundedRem;
-  }
 
   const paidMinsRounded = roundForPay(paidMinsRaw);
 
@@ -531,6 +541,61 @@ function calcTotals({ clockIn, clockOut, breakMinutes, breakIsPaid, hourlyRate }
     payLabel,
     paidRoundedLabel,
   };
+}
+
+// ✅ When tracking is NOT required (scheduled totals)
+function calcScheduledTotals({
+  shift_date,
+  end_date,
+  start_at,
+  end_at,
+  breakMinutes,
+  breakIsPaid,
+  hourlyRate,
+}) {
+  if (!shift_date || !end_date || !start_at || !end_at) return null;
+
+  const start = dtMs(shift_date, start_at);
+  const end = dtMs(end_date, end_at);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+
+  const totalShiftMins = Math.max(1, Math.round((end - start) / 60000));
+
+  const b = Math.max(0, Number(breakMinutes || 0));
+  const paidMinsRaw = breakIsPaid ? totalShiftMins : Math.max(0, totalShiftMins - b);
+  const paidMinsRounded = roundForPay(paidMinsRaw);
+
+  const workedLabel = `${Math.floor(totalShiftMins / 60)}h ${totalShiftMins % 60}m`;
+
+  let payLabel = "";
+  if (Number.isFinite(hourlyRate) && hourlyRate != null) {
+    const pay = (paidMinsRounded / 60) * hourlyRate;
+    payLabel = `$${pay.toFixed(2)}`;
+  }
+
+  const paidRoundedLabel = `${Math.floor(paidMinsRounded / 60)}h ${paidMinsRounded % 60}m`;
+
+  return {
+    workedLabel,
+    payLabel,
+    paidRoundedLabel,
+  };
+}
+
+// Shared pay rounding rule
+function roundForPay(mins) {
+  if (!mins || mins <= 0) return 0;
+  if (mins <= 19) return 0;
+
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+
+  let roundedRem = 0;
+  if (rem <= 19) roundedRem = 0;
+  else if (rem <= 44) roundedRem = 30;
+  else roundedRem = 60;
+
+  return hours * 60 + roundedRem;
 }
 
 function renderStatusBadge(status) {
