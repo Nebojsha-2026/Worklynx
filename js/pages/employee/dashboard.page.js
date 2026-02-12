@@ -223,6 +223,33 @@ async function getActiveClockedInShift({ userId }) {
    Render
 --------------------------- */
 
+ function renderTopCardsNextShift({ upcoming }) {
+  const now = new Date();
+  const nextShift =
+    upcoming.find((s) => shiftStartMs(s) >= now.getTime()) ||
+    upcoming.find((s) => shiftStartMs(s) >= 0) ||
+    null;
+
+  if (!nextShift) {
+    cardNextTitleEl.textContent = "No upcoming shifts";
+    cardNextMetaEl.textContent = "—";
+    cardNextBadgeEl.innerHTML = "";
+    return;
+  }
+
+  const when = formatWhenLabel(nextShift.shift_date);
+  const time = `${String(nextShift.start_at || "").slice(0, 5)} → ${String(nextShift.end_at || "").slice(0, 5)}`;
+  const loc = nextShift.location ? ` • ${nextShift.location}` : "";
+  const needsTracking = nextShift.track_time === false ? false : true;
+
+  cardNextTitleEl.textContent = nextShift.title || "Upcoming shift";
+  cardNextMetaEl.textContent = `${when} • ${time}${loc}`;
+
+  cardNextBadgeEl.innerHTML = needsTracking
+    ? `<span class="wl-badge wl-badge--active">Tracking required</span>`
+    : `<span class="wl-badge wl-badge--draft">No tracking required</span>`;
+}
+
 function renderToday({ upcoming, active }) {
   const now = new Date();
   const today = isoDate(now);
@@ -254,33 +281,6 @@ function renderToday({ upcoming, active }) {
     `;
     return;
   }
-
-  function renderTopCardsNextShift({ upcoming }) {
-  const now = new Date();
-  const nextShift =
-    upcoming.find((s) => shiftStartMs(s) >= now.getTime()) ||
-    upcoming.find((s) => shiftStartMs(s) >= 0) ||
-    null;
-
-  if (!nextShift) {
-    cardNextTitleEl.textContent = "No upcoming shifts";
-    cardNextMetaEl.textContent = "—";
-    cardNextBadgeEl.innerHTML = "";
-    return;
-  }
-
-  const when = formatWhenLabel(nextShift.shift_date);
-  const time = `${String(nextShift.start_at || "").slice(0, 5)} → ${String(nextShift.end_at || "").slice(0, 5)}`;
-  const loc = nextShift.location ? ` • ${nextShift.location}` : "";
-  const needsTracking = nextShift.track_time === false ? false : true;
-
-  cardNextTitleEl.textContent = nextShift.title || "Upcoming shift";
-  cardNextMetaEl.textContent = `${when} • ${time}${loc}`;
-
-  cardNextBadgeEl.innerHTML = needsTracking
-    ? `<span class="wl-badge wl-badge--active">Tracking required</span>`
-    : `<span class="wl-badge wl-badge--draft">No tracking required</span>`;
-}
   
   todayPillEl.innerHTML = `<span class="wl-badge wl-badge--draft">Not clocked in</span>`;
 
