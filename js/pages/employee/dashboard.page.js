@@ -46,21 +46,21 @@ content.innerHTML = `
   </div>
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
-    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
       
-      <div class="wl-card wl-panel" style="padding:14px;">
+      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
         <div style="font-size:12px; opacity:.8;">Available balance</div>
         <div id="cardBalance" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
         <div style="font-size:12px; opacity:.7; margin-top:6px;">From posted earnings</div>
       </div>
 
-      <div class="wl-card wl-panel" style="padding:14px;">
+      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
         <div style="font-size:12px; opacity:.8;">This week</div>
         <div id="cardWeek" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
         <div style="font-size:12px; opacity:.7; margin-top:6px;">Mon → today</div>
       </div>
 
-      <div class="wl-card wl-panel" style="padding:14px;">
+      <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
         <div style="font-size:12px; opacity:.8;">Next shift</div>
         <div id="cardNextTitle" style="font-weight:900; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">—</div>
         <div id="cardNextMeta" style="font-size:12px; opacity:.75; margin-top:6px;">—</div>
