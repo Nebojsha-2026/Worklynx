@@ -4,8 +4,28 @@ import { getSupabase } from "./supabaseClient.js";
 let cachedOrg = null;
 
 /**
+ * Apply organization theme to CSS variables.
+ */
+function applyOrgTheme(theme) {
+  if (!theme) return;
+
+  const root = document.documentElement;
+
+  if (theme.brand) {
+    root.style.setProperty("--brand", theme.brand);
+  }
+
+  if (theme.brandSoft) {
+    root.style.setProperty("--brand-soft", theme.brandSoft);
+  }
+
+  if (theme.brandBorder) {
+    root.style.setProperty("--brand-border", theme.brandBorder);
+  }
+}
+
+/**
  * Load the active organization for the logged-in user.
- * For now: pick the org where user is BO (later we’ll support multi-org).
  */
 export async function loadOrgContext() {
   if (cachedOrg) return cachedOrg;
@@ -22,6 +42,10 @@ export async function loadOrgContext() {
   if (error) throw error;
 
   cachedOrg = data;
+
+  // ✅ Apply theme after loading
+  applyOrgTheme(data.theme);
+
   return data;
 }
 
