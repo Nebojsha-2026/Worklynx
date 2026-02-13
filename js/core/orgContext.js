@@ -5,27 +5,26 @@ let cachedOrg = null;
 
 /**
  * Apply organization theme to CSS variables.
+ * Ensures stale values don't stick if a field is removed.
  */
 function applyOrgTheme(theme) {
-  if (!theme) return;
-
   const root = document.documentElement;
 
-  if (theme.brand) {
-    root.style.setProperty("--brand", theme.brand);
-  }
+  // Always reset to defaults first (prevents stale vars lingering)
+  root.style.removeProperty("--brand");
+  root.style.removeProperty("--brand-soft");
+  root.style.removeProperty("--brand-border");
 
-  if (theme.brandSoft) {
-    root.style.setProperty("--brand-soft", theme.brandSoft);
-  }
+  if (!theme) return;
 
-  if (theme.brandBorder) {
-    root.style.setProperty("--brand-border", theme.brandBorder);
-  }
+  if (theme.brand) root.style.setProperty("--brand", theme.brand);
+  if (theme.brandSoft) root.style.setProperty("--brand-soft", theme.brandSoft);
+  if (theme.brandBorder) root.style.setProperty("--brand-border", theme.brandBorder);
 }
 
 /**
  * Load the active organization for the logged-in user.
+ * For now: most recently created org (later: select by org_members).
  */
 export async function loadOrgContext() {
   if (cachedOrg) return cachedOrg;
@@ -40,10 +39,11 @@ export async function loadOrgContext() {
     .single();
 
   if (error) throw error;
+  if (!data) throw new Error("Organization not found.");
 
   cachedOrg = data;
 
-  // ✅ Apply theme after loading
+  // Apply theme after loading
   applyOrgTheme(data.theme);
 
   return data;
