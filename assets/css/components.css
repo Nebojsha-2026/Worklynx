@@ -11,30 +11,47 @@
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--wl-border);
-  background: rgba(255,255,255,0.06);
+  background: var(--wl-card);
   color: var(--text);
   font-weight: 800;
   cursor: pointer;
   transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
   line-height: 1;
+  box-shadow: var(--shadow-sm);
 }
+
 .wl-btn:hover{
   transform: translateY(-1px);
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.18);
+  border-color: rgba(15,23,42,0.16);
+  box-shadow: var(--shadow-md);
 }
+
 .wl-btn:active{
   transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
+
 .wl-btn:disabled{
   opacity: .6;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
-/* Optional: make link-buttons behave nicely inside grids */
+/* Optional: link-buttons behave nicely inside grids */
 a.wl-btn{
   width: fit-content;
+}
+
+/* Primary button (optional) */
+.wl-btn.wl-btn--primary{
+  background: var(--brand);
+  border-color: rgba(0,0,0,0);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(109,40,217,0.18);
+}
+.wl-btn.wl-btn--primary:hover{
+  box-shadow: 0 14px 30px rgba(109,40,217,0.22);
 }
 
 /* --------
@@ -50,7 +67,7 @@ a.wl-btn{
   display:grid;
   gap: 12px;
   grid-template-columns: 1fr 1fr;
-  align-items: start; /* ✅ prevent equal-height stretching */
+  align-items: start; /* prevent equal-height stretching */
 }
 @media (max-width: 900px){
   .wl-form__row{ grid-template-columns: 1fr; }
@@ -71,10 +88,13 @@ a.wl-btn{
   padding: 12px 12px;
   border-radius: 12px;
   border: 1px solid var(--wl-border);
-  background: rgba(0,0,0,0.22);
+  background: #fff;
   color: var(--text);
   outline: none;
+  transition: box-shadow .12s ease, border-color .12s ease, background .12s ease;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
+
 .wl-form textarea{
   min-height: 96px;
   resize: vertical;
@@ -83,47 +103,41 @@ a.wl-btn{
 .wl-form input:focus,
 .wl-form select:focus,
 .wl-form textarea:focus{
-  border-color: rgba(255,255,255,0.22);
-  box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+  border-color: rgba(109,40,217,0.35);
+  box-shadow: 0 0 0 3px rgba(109,40,217,0.14);
 }
 
 /* --------
    Panels / Cards
 -------- */
-
-/* Panel padding */
 .wl-panel{
   padding: 18px;
 }
 
-/* Make panels look less “slabby” when content is short */
-.wl-panel > :first-child{
-  margin-top: 0;
-}
-.wl-panel > :last-child{
-  margin-bottom: 0;
-}
+.wl-panel > :first-child{ margin-top: 0; }
+.wl-panel > :last-child{ margin-bottom: 0; }
 
 /* Cards should not force height */
 .wl-card{
   height: auto;
 }
 
-/* A simple vertical rhythm helper for stacked content */
+/* Vertical rhythm helper */
 .wl-stack{
   display:grid;
   gap: 10px;
 }
 
-/* Improve headings/subhead spacing inside panels */
+/* Headings/subhead spacing inside panels */
 .wl-panel h1,
 .wl-panel h2,
 .wl-panel h3{
   margin: 0;
 }
+
 .wl-panel .wl-subtext{
   font-size: 13px;
-  opacity: .8;
+  color: var(--muted);
   margin-top: 6px;
 }
 
@@ -134,10 +148,19 @@ a.wl-btn{
   border: 1px solid var(--wl-border);
   border-radius: 12px;
   padding: 12px 12px;
-  background: rgba(255,255,255,0.06);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
 }
-.wl-alert--error{ border-color: rgba(239,68,68,0.55); }
-.wl-alert--success{ border-color: rgba(34,197,94,0.55); }
+
+.wl-alert--error{
+  border-color: rgba(239,68,68,0.35);
+  background: rgba(239,68,68,0.06);
+}
+
+.wl-alert--success{
+  border-color: rgba(34,197,94,0.35);
+  background: rgba(34,197,94,0.08);
+}
 
 /* --------
    Badges
@@ -151,28 +174,28 @@ a.wl-btn{
   font-size: 12px;
   font-weight: 800;
   border: 1px solid var(--wl-border);
-  background: rgba(255,255,255,0.06);
-  opacity: .95;
+  background: rgba(15,23,42,0.04);
+  color: var(--text);
   white-space: nowrap;
 }
 
 .wl-badge--active{
-  border-color: rgba(34,197,94,0.55);
+  border-color: rgba(34,197,94,0.35);
   background: rgba(34,197,94,0.12);
 }
 
 .wl-badge--cancelled{
-  border-color: rgba(239,68,68,0.55);
-  background: rgba(239,68,68,0.12);
+  border-color: rgba(239,68,68,0.35);
+  background: rgba(239,68,68,0.10);
 }
 
 .wl-badge--draft{
-  border-color: rgba(234,179,8,0.55);
-  background: rgba(234,179,8,0.12);
+  border-color: rgba(234,179,8,0.40);
+  background: rgba(234,179,8,0.14);
 }
 
 .wl-badge--offered{
-  border-color: rgba(59,130,246,0.55);
+  border-color: rgba(59,130,246,0.35);
   background: rgba(59,130,246,0.12);
 }
 
@@ -185,6 +208,7 @@ a.wl-btn{
   flex-wrap:wrap;
   margin-top:8px;
 }
+
 .wl-chip{
   display:inline-flex;
   align-items:center;
@@ -192,14 +216,15 @@ a.wl-btn{
   padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid var(--wl-border);
-  background: rgba(255,255,255,0.06);
+  background: rgba(15,23,42,0.04);
   font-size: 12px;
   line-height: 1;
-  opacity: .95;
+  color: var(--text);
 }
+
 .wl-chip small{
-  opacity:.8;
-  font-size:11px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .wl-pill{
@@ -208,17 +233,19 @@ a.wl-btn{
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--wl-border);
-  background: rgba(255,255,255,0.06);
-  opacity: .95;
+  background: rgba(15,23,42,0.04);
+  color: var(--text);
 }
 
 /* Employee polish */
-.wl-card.is-cancelled {
+.wl-card.is-cancelled{
   opacity: 0.75;
-  filter: grayscale(0.2);
+  filter: grayscale(0.15);
 }
 
-/* Employee shift filter pills */
+/* --------
+   Filters
+-------- */
 .wl-filter-group{
   display:flex;
   gap:8px;
@@ -227,22 +254,23 @@ a.wl-btn{
 
 .wl-filter{
   border: 1px solid var(--wl-border);
-  background: rgba(255,255,255,0.06);
+  background: var(--wl-card);
   color: var(--text);
   padding: 7px 12px;
   border-radius: 999px;
   font-size: 13px;
   cursor: pointer;
-  opacity: .9;
+  box-shadow: var(--shadow-sm);
+  transition: transform .08s ease, border-color .12s ease, box-shadow .12s ease, background .12s ease;
 }
 
 .wl-filter:hover{
-  background: rgba(255,255,255,0.08);
-  opacity: 1;
+  transform: translateY(-1px);
+  border-color: rgba(15,23,42,0.16);
+  box-shadow: var(--shadow-md);
 }
 
 .wl-filter.is-active{
-  background: rgba(255,255,255,0.14);
-  border-color: rgba(255,255,255,0.22);
-  opacity: 1;
+  background: rgba(109,40,217,0.10);
+  border-color: rgba(109,40,217,0.25);
 }
