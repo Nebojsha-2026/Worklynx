@@ -2,51 +2,43 @@
 @import "./layout.css";
 @import "./components.css";
 
-/* css/app.css */
-:root {
-  --bg: #0b1220;
-  --card: rgba(255,255,255,0.08);
-  --card2: rgba(255,255,255,0.06);
-  --border: rgba(255,255,255,0.14);
-  --text: rgba(255,255,255,0.92);
-  --muted: rgba(255,255,255,0.68);
-  --brand: #7c3aed;
-  --brand2: #22c55e;
+/* assets/css/app.css */
 
-  /* ✅ Global content width (increase this to utilize wide screens) */
-  --content-max: 1400px;
-  --content-pad: clamp(16px, 2vw, 28px);
+/* Global layout sizing (used by containers + content area) */
+:root{
+  --content-max: 1200px;                 /* match themes.css wl-max vibe */
+  --content-pad: clamp(16px, 2vw, 28px); /* responsive side padding */
 }
 
 * { box-sizing: border-box; }
 
-body {
+body{
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
-  background: radial-gradient(1200px 600px at 20% 10%, rgba(124,58,237,0.35), transparent 60%),
-              radial-gradient(1000px 700px at 90% 30%, rgba(34,197,94,0.20), transparent 60%),
-              var(--bg);
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
 
-a { color: inherit; text-decoration: none; }
+/* Links */
+a{ color: inherit; text-decoration: none; }
 
-/* ✅ Use more of the page width everywhere */
-.container {
+/* Use more of the page width everywhere (marketing pages that use .container) */
+.container{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
   padding: 26px 0;
 }
 
-.nav {
-  display: flex;
+/* Optional marketing bits (if you still use them) */
+.nav{
+  display:flex;
   justify-content: space-between;
   align-items: center;
   padding: 14px 0;
 }
 
-.brand {
+.brand{
   display:flex;
   align-items:center;
   gap:10px;
@@ -54,24 +46,25 @@ a { color: inherit; text-decoration: none; }
   letter-spacing:0.2px;
 }
 
-.badge {
-  border: 1px solid var(--border);
+.badge{
+  border: 1px solid var(--wl-border);
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.06);
+  background: var(--wl-card);
   color: var(--muted);
   font-size: 13px;
 }
 
-.hero { display:grid; gap: 18px; padding: 60px 0 30px; }
-.hero h1 { font-size: clamp(2.2rem, 4vw, 3.2rem); margin: 0; line-height: 1.05; }
-.hero p { color: var(--muted); font-size: 1.05rem; margin: 0; max-width: 58ch; }
+.hero{ display:grid; gap: 18px; padding: 60px 0 30px; }
+.hero h1{ font-size: clamp(2.2rem, 4vw, 3.2rem); margin: 0; line-height: 1.05; }
+.hero p{ color: var(--muted); font-size: 1.05rem; margin: 0; max-width: 58ch; }
 
-.row { display:flex; gap:12px; flex-wrap: wrap; margin-top: 14px; }
+.row{ display:flex; gap:12px; flex-wrap: wrap; margin-top: 14px; }
 
-.btn {
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.06);
+/* Generic buttons (your app mostly uses .wl-btn in components.css) */
+.btn{
+  border: 1px solid var(--wl-border);
+  background: var(--wl-card);
   color: var(--text);
   padding: 12px 14px;
   border-radius: 12px;
@@ -80,93 +73,78 @@ a { color: inherit; text-decoration: none; }
   gap:10px;
   font-weight: 750;
   cursor: pointer;
+  transition: transform .08s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(15,23,42,0.16);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.06);
+}
+.btn.primary{
+  background: var(--brand);
+  border-color: rgba(0,0,0,0);
+  color: #fff;
 }
 
-.btn.primary {
-  background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.7));
-  border: none;
-}
-
-.btn:hover { transform: translateY(-1px); }
-
-.grid {
+/* Generic cards (your app mostly uses .wl-card) */
+.grid{
   display:grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 14px;
   margin-top: 22px;
 }
 
-.card {
-  border: 1px solid var(--border);
-  background: var(--card);
+.card{
+  border: 1px solid var(--wl-border);
+  background: var(--wl-card);
   border-radius: 18px;
   padding: 16px;
+  box-shadow: 0 10px 24px rgba(15,23,42,0.05);
 }
+.card h3{ margin: 0 0 8px; }
+.card p{ margin: 0; color: var(--muted); line-height: 1.5; }
 
-.card h3 { margin: 0 0 8px; }
-.card p { margin: 0; color: var(--muted); line-height: 1.5; }
+/* Forms (generic) */
+label{ font-size: 13px; color: var(--muted); }
 
-.shell {
-  border: 1px solid var(--border);
-  background: var(--card2);
-  border-radius: 18px;
-  padding: 18px;
-}
-
-.form { display:grid; gap: 12px; }
-label { font-size: 13px; color: var(--muted); }
-
-input, select {
+input, select{
   width: 100%;
   padding: 12px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--wl-border);
+  background: #ffffff;
   color: var(--text);
   outline: none;
+  transition: box-shadow .12s ease, border-color .12s ease;
 }
 
-.notice {
+input:focus, select:focus{
+  border-color: rgba(109,40,217,0.35);
+  box-shadow: 0 0 0 3px rgba(109,40,217,0.14);
+}
+
+/* Notices */
+.notice{
   display:none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--wl-border);
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.06);
+  background: var(--wl-card);
 }
-.notice.error { border-color: rgba(239,68,68,0.7); }
-.notice.success { border-color: rgba(34,197,94,0.7); }
+.notice.error{ border-color: rgba(239,68,68,0.35); }
+.notice.success{ border-color: rgba(34,197,94,0.35); }
 
-.topbar {
-  display:flex;
-  justify-content: space-between;
-  align-items:center;
-  gap: 10px;
-  padding: 10px 0 18px;
-}
-
-.kpi { display:flex; gap: 10px; flex-wrap: wrap; }
-.kpi .pill {
-  border: 1px solid var(--border);
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  color: var(--muted);
-}
-
-.actions { display:flex; gap: 12px; flex-wrap: wrap; }
-
-/* ✅ Center content area but allow it to be wider */
-#wlContent { width: 100%; }
-
-#wlContent .wl-page {
-  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
-  margin: 0 auto;
-}
-
-/* ✅ Prevent "Upcoming shifts" column stretching to match the taller column */
-.wl-form__row {
+/* Keep your “don’t stretch columns to equal height” rule */
+.wl-form__row{
   align-items: start;
 }
-.wl-form__row > section {
+.wl-form__row > section{
   align-self: start;
+}
+
+/* Center content area but allow it to be wider */
+#wlContent{ width: 100%; }
+#wlContent .wl-page{
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
+  margin: 0 auto;
 }
