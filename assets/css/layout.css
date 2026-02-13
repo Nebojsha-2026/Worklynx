@@ -12,7 +12,7 @@ body{
 main.wl-page, main.wl-auth{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
-  padding: 24px 0 32px;
+  padding: 28px 0 40px;
   flex: 1;
 }
 
@@ -22,13 +22,14 @@ main.wl-page, main.wl-auth{
   top: 0;
   z-index: 20;
 
-  /* ✅ Light-theme friendly sticky header */
-  background: rgba(248,250,252,0.85); /* same vibe as --bg */
+  /* Light-theme friendly sticky header */
+  background: rgba(248,250,252,0.88); /* same vibe as --bg */
   backdrop-filter: blur(10px);
 
   border-bottom: 1px solid var(--wl-border);
 }
 
+/* keep header content aligned with main width */
 .wl-header__inner{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
@@ -54,6 +55,7 @@ main.wl-page, main.wl-auth{
   flex: 1;
   justify-content:center;
   text-align:center;
+  min-width: 0; /* prevents overflow pushing actions off */
 }
 .wl-org img{ width:32px; height:32px; border-radius:8px; }
 
@@ -65,13 +67,13 @@ main.wl-page, main.wl-auth{
   justify-content:flex-end;
 }
 .wl-actions select, .wl-actions button{
-  max-width: 160px;
+  max-width: 180px;
 }
 
 /* FOOTER */
 .wl-footer{
   border-top: 1px solid var(--wl-border);
-  padding: 20px 0;
+  padding: 22px 0;
   opacity: 0.98;
   background: transparent;
 }
@@ -122,21 +124,26 @@ main.wl-page, main.wl-auth{
   margin: 0 auto;
   display:grid;
 
-  /* Slightly wider sidebar reads more “app-like” */
-  grid-template-columns: 280px 1fr;
+  /* ✅ Slightly wider, more “app-like” proportions */
+  grid-template-columns: 300px 1fr;
 
-  gap: 18px;
+  gap: 20px;
   padding: 18px 0 32px;
   align-items: start;
 }
 
 /* Sidebar */
 .wl-sidebar{
-  padding: 12px;
+  padding: 14px;
   height: fit-content;
   position: sticky;
-  top: 76px; /* ✅ slightly more breathing room below header */
+  top: 76px;
   box-shadow: var(--shadow-sm);
+
+  /* subtle separation in light theme */
+  background: var(--wl-card);
+  border: 1px solid var(--wl-border);
+  border-radius: 14px;
 }
 
 /* Nav */
@@ -160,16 +167,16 @@ main.wl-page, main.wl-auth{
   transition: background .12s ease, border-color .12s ease, transform .08s ease;
 }
 
-/* ✅ Light theme hover */
+/* Light theme hover */
 .wl-sidebar .wl-snav__item:hover{
   background: rgba(15,23,42,0.04);
   border-color: rgba(15,23,42,0.08);
   transform: translateY(-1px);
 }
 
-/* ✅ Light theme active */
+/* Light theme active */
 .wl-sidebar .wl-snav__item.is-active{
-  background: rgba(109,40,217,0.08);     /* uses brand purple vibe */
+  background: rgba(109,40,217,0.08);
   border-color: rgba(109,40,217,0.18);
   opacity: 1;
 }
@@ -180,6 +187,7 @@ main.wl-page, main.wl-auth{
 
   .wl-shell{
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 
   .wl-sidebar{
@@ -192,7 +200,7 @@ main.wl-page, main.wl-auth{
   .wl-brand{ min-width: unset; }
 }
 
-/* IMPORTANT: remove old hard cap that caused “tight middle” look */
+/* Remove old hard cap that caused “tight middle” look */
 .wl-page{
   max-width: none;
   width: 100%;
