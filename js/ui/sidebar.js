@@ -3,12 +3,13 @@ import { path } from "../core/config.js";
 
 const NAV = {
   BO: [
-    ["Dashboard", "/app/bo/dashboard.html"],
-    ["Managers", "/app/bo/managers.html"],
-    ["Employees", "/app/bo/employees.html"],
-    ["Reports", "/app/bo/reports.html"],
-    ["Billing", "/app/bo/billing.html"],
-  ],
+  ["Dashboard", "/app/bo/dashboard.html"],
+  ["Managers", "/app/bo/managers.html"],
+  ["Employees", "/app/bo/employees.html"],
+  ["Reports", "/app/bo/reports.html"],
+  ["Billing", "/app/bo/billing.html"],
+  ["Settings", "/app/bo/settings.html"],
+],
   BM: [
     ["Dashboard", "/app/bm/dashboard.html"],
     ["Shifts", "/app/bm/shifts.html"],
