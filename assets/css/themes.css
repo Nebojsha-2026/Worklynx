@@ -1,25 +1,23 @@
 /* assets/css/themes.css */
-
 :root{
   /* Layout */
   --wl-max: 1200px;
   --wl-pad: 20px;
 
   /* Core colors (LIGHT THEME) */
-  --bg: #f6f7fb;                 /* soft neutral background */
-  --wl-card: #ffffff;            /* card surface */
+  --bg: #f8fafc;
+  --wl-card: #ffffff;
   --wl-border: rgba(15,23,42,0.10);
 
-  --text: #0f172a;               /* slate-900 */
-  --muted: #475569;              /* slate-600 */
+  --text: #0f172a;
+  --muted: #475569;
 
-  /* Brand (owner-customizable later via organizations.theme) */
-  --brand: #4f46e5;              /* indigo-600 (cleaner than purple for SaaS) */
-  --brand2: #22c55e;             /* green */
+  /* Brand (default) */
+  --brand: #6d28d9;
 
-  /* Derived brand helpers (use in components later) */
-  --brand-soft: rgba(79,70,229,0.10);
-  --brand-border: rgba(79,70,229,0.22);
+  /* ✅ brand derivatives used across UI (will be overridden by org theme) */
+  --brand-soft: rgba(109,40,217,0.14);
+  --brand-border: rgba(109,40,217,0.35);
 
   /* Effects */
   --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
