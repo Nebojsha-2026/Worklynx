@@ -5,6 +5,7 @@ import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext, refreshOrgContext } from "../../core/orgContext.js";
 import { updateOrganization } from "../../data/organizations.api.js";
+import { getSupabase } from "../../core/supabaseClient.js";
 
 await requireRole(["BO"]);
 
@@ -39,9 +40,17 @@ content.innerHTML = `
       </div>
 
       <div>
-        <label>Company logo URL</label>
-        <input id="companyLogoUrl" type="url" placeholder="https://..." />
-        <div class="wl-subtext">Later we can replace this with upload to Supabase Storage.</div>
+        <label>Company logo</label>
+        <input id="companyLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+        <div class="wl-subtext">Recommended: square PNG 256×256 or 512×512. Max ~2MB.</div>
+
+        <div style="display:flex; gap:12px; align-items:center; margin-top:10px;">
+          <img id="logoPreview" alt="Logo preview" style="width:44px; height:44px; border-radius:10px; border:1px solid var(--wl-border); object-fit:cover; background:#fff;" />
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="wl-btn" id="removeLogoBtn" type="button">Remove logo</button>
+            <div class="wl-subtext" id="logoStatus" style="margin:0;"></div>
+          </div>
+        </div>
       </div>
 
       <div class="wl-form__row">
@@ -69,13 +78,21 @@ content.innerHTML = `
 const $ = (sel) => document.querySelector(sel);
 
 const nameEl = $("#companyName");
-const logoEl = $("#companyLogoUrl");
 const brandEl = $("#brandColor");
+const logoFileEl = $("#companyLogoFile");
+const logoPreviewEl = $("#logoPreview");
+const logoStatusEl = $("#logoStatus");
+const removeLogoBtn = $("#removeLogoBtn");
+
 const saveBtn = $("#saveBtn");
 const resetBtn = $("#resetBtn");
 
 const successBox = $("#successBox");
 const errorBox = $("#errorBox");
+
+// local state
+let selectedLogoFile = null;
+let removeLogo = false;
 
 function showSuccess(msg) {
   successBox.style.display = "block";
@@ -118,39 +135,108 @@ function applyThemeVars(theme) {
   if (theme.brandBorder) root.style.setProperty("--brand-border", theme.brandBorder);
 }
 
+function setLogoPreview(url) {
+  logoPreviewEl.src = url || "";
+}
+
 function fillForm(fromOrg) {
   nameEl.value = fromOrg?.name || "";
-  logoEl.value = fromOrg?.company_logo_url || "";
 
   const brand = fromOrg?.theme?.brand || "#6d28d9";
   brandEl.value = brand;
-
-  // apply loaded theme to preview instantly
   applyThemeVars(buildThemeFromBrandHex(brand) || fromOrg?.theme);
+
+  // logo preview
+  setLogoPreview(fromOrg?.company_logo_url || "");
+  logoStatusEl.textContent = fromOrg?.company_logo_url ? "Current logo loaded." : "No logo set.";
+
+  // reset logo state
+  selectedLogoFile = null;
+  removeLogo = false;
+  logoFileEl.value = "";
 }
 
 fillForm(org);
 
+// Live theme preview
 brandEl.addEventListener("input", () => {
   const theme = buildThemeFromBrandHex(brandEl.value);
   if (!theme) return;
   applyThemeVars(theme);
 });
 
+// File selection
+logoFileEl.addEventListener("change", () => {
+  const file = logoFileEl.files?.[0] || null;
+  if (!file) return;
+
+  // basic guard
+  if (file.size > 2 * 1024 * 1024) {
+    logoFileEl.value = "";
+    showError("Logo file is too large. Please keep it under ~2MB.");
+    return;
+  }
+
+  selectedLogoFile = file;
+  removeLogo = false;
+
+  // instant local preview
+  const objectUrl = URL.createObjectURL(file);
+  setLogoPreview(objectUrl);
+  logoStatusEl.textContent = `Selected: ${file.name}`;
+});
+
+// Remove logo
+removeLogoBtn.addEventListener("click", () => {
+  selectedLogoFile = null;
+  removeLogo = true;
+  logoFileEl.value = "";
+  setLogoPreview("");
+  logoStatusEl.textContent = "Logo will be removed on Save.";
+});
+
 resetBtn.addEventListener("click", async () => {
   try {
     const fresh = await refreshOrgContext();
     fillForm(fresh);
-
-    // ✅ update ONLY org area (center)
     updateHeaderOrg(fresh);
-
     showSuccess("Reset to saved settings.");
   } catch (e) {
     console.error(e);
     showError(e?.message || "Failed to reset.");
   }
 });
+
+/**
+ * Upload logo to Supabase Storage and return public URL.
+ */
+async function uploadLogoToStorage({ orgId, file }) {
+  const supabase = getSupabase();
+  const bucket = "org-logos";
+
+  // keep extension
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const safeExt = ext.replace(/[^a-z0-9]/g, "") || "png";
+
+  // stable key per org (upsert overwrites)
+  const objectPath = `${orgId}/logo.${safeExt}`;
+
+  const { error: upErr } = await supabase.storage
+    .from(bucket)
+    .upload(objectPath, file, {
+      upsert: true,
+      cacheControl: "3600",
+      contentType: file.type || undefined,
+    });
+
+  if (upErr) throw upErr;
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+  const url = data?.publicUrl;
+
+  if (!url) throw new Error("Could not get public URL for uploaded logo.");
+  return url;
+}
 
 saveBtn.addEventListener("click", async () => {
   try {
@@ -159,20 +245,29 @@ saveBtn.addEventListener("click", async () => {
     const newName = nameEl.value.trim();
     if (!newName) throw new Error("Company name is required.");
 
-    const logoUrl = logoEl.value.trim();
     const theme = buildThemeFromBrandHex(brandEl.value);
     if (!theme) throw new Error("Invalid brand color.");
 
+    // ✅ handle logo
+    let nextLogoUrl = org.company_logo_url || null;
+
+    if (removeLogo) {
+      nextLogoUrl = null;
+    } else if (selectedLogoFile) {
+      logoStatusEl.textContent = "Uploading logo…";
+      nextLogoUrl = await uploadLogoToStorage({ orgId: org.id, file: selectedLogoFile });
+      logoStatusEl.textContent = "Logo uploaded.";
+    }
+
     await updateOrganization(org.id, {
       name: newName,
-      company_logo_url: logoUrl || null,
+      company_logo_url: nextLogoUrl,
       theme,
     });
 
-    // refresh cached org + apply theme
     const fresh = await refreshOrgContext();
 
-    // ✅ update ONLY org area (center) — does NOT touch WorkLynx left branding
+    // ✅ update header live (org area only)
     updateHeaderOrg(fresh);
 
     showSuccess("Saved successfully.");
