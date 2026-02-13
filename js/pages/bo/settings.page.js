@@ -1,6 +1,6 @@
 // js/pages/bo/settings.page.js
 import { requireRole } from "../../core/guards.js";
-import { renderHeader } from "../../ui/header.js";
+import { renderHeader, updateHeaderOrg } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext, refreshOrgContext } from "../../core/orgContext.js";
@@ -118,39 +118,6 @@ function applyThemeVars(theme) {
   if (theme.brandBorder) root.style.setProperty("--brand-border", theme.brandBorder);
 }
 
-/**
- * Best-effort header update without relying on internal header.js structure.
- * If selectors change later, worst case: header won't auto-update, but save still works.
- */
-function updateHeaderUI({ name, company_logo_url }) {
-  // update title (optional)
-  if (name) document.title = `Company Settings • ${name}`;
-
-  // common header patterns
-  const nameTargets = [
-    ".wl-org strong",
-    ".wl-org .wl-org__name",
-    ".wl-brand strong",
-  ];
-
-  for (const sel of nameTargets) {
-    const el = document.querySelector(sel);
-    if (el && name) el.textContent = name;
-  }
-
-  const logoTargets = [
-    ".wl-org img",
-    ".wl-brand img",
-  ];
-
-  for (const sel of logoTargets) {
-    const img = document.querySelector(sel);
-    if (img) {
-      img.src = company_logo_url || "/assets/images/placeholder-company-logo.png";
-    }
-  }
-}
-
 function fillForm(fromOrg) {
   nameEl.value = fromOrg?.name || "";
   logoEl.value = fromOrg?.company_logo_url || "";
@@ -158,7 +125,7 @@ function fillForm(fromOrg) {
   const brand = fromOrg?.theme?.brand || "#6d28d9";
   brandEl.value = brand;
 
-  // also apply loaded theme to preview instantly
+  // apply loaded theme to preview instantly
   applyThemeVars(buildThemeFromBrandHex(brand) || fromOrg?.theme);
 }
 
@@ -174,6 +141,10 @@ resetBtn.addEventListener("click", async () => {
   try {
     const fresh = await refreshOrgContext();
     fillForm(fresh);
+
+    // ✅ update ONLY org area (center)
+    updateHeaderOrg(fresh);
+
     showSuccess("Reset to saved settings.");
   } catch (e) {
     console.error(e);
@@ -201,8 +172,8 @@ saveBtn.addEventListener("click", async () => {
     // refresh cached org + apply theme
     const fresh = await refreshOrgContext();
 
-    // ensure header updates immediately
-    updateHeaderUI(fresh);
+    // ✅ update ONLY org area (center) — does NOT touch WorkLynx left branding
+    updateHeaderOrg(fresh);
 
     showSuccess("Saved successfully.");
   } catch (e) {
