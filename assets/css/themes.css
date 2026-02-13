@@ -2,18 +2,19 @@
 
 :root{
   /* Layout + components tokens */
-  --wl-max: 1100px;
-  --wl-pad: 16px;
+  --wl-max: 1200px;     /* was 1100px -> uses more screen width */
+  --wl-pad: 20px;       /* a bit more breathing room */
 
-  --wl-card: rgba(255,255,255,0.06);
-  --wl-border: rgba(255,255,255,0.12);
+  /* Core surfaces */
+  --bg: #f6f7fb;        /* app background */
+  --wl-card: #ffffff;   /* card surface */
+  --wl-border: rgba(15, 23, 42, 0.10); /* subtle border */
 
-  /* App colors */
-  --bg: #0b1220;
-  --text: rgba(255,255,255,0.92);
-  --muted: rgba(255,255,255,0.68);
+  /* Text */
+  --text: rgba(15, 23, 42, 0.92);      /* slate-900-ish */
+  --muted: rgba(15, 23, 42, 0.62);
 
-  --brand: #7c3aed;
-  --brand2: #22c55e;
+  /* Brand */
+  --brand: #6d28d9;     /* slightly deeper purple for “pro” look */
+  --brand2: #16a34a;    /* green accent */
 }
-
