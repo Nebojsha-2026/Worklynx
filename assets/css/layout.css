@@ -8,7 +8,7 @@ body{
   flex-direction:column;
 }
 
-/* ✅ Main pages use the global width vars (from app.css) */
+/* Main pages use the global width vars (from app.css) */
 main.wl-page, main.wl-auth{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
@@ -21,14 +21,18 @@ main.wl-page, main.wl-auth{
   position: sticky;
   top: 0;
   z-index: 20;
+
+  /* ✅ Light-theme friendly sticky header */
+  background: rgba(248,250,252,0.85); /* same vibe as --bg */
   backdrop-filter: blur(10px);
+
   border-bottom: 1px solid var(--wl-border);
 }
 
 .wl-header__inner{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
-  padding: 10px 0;
+  padding: 12px 0;
   display:flex;
   align-items:center;
   gap: 12px;
@@ -60,16 +64,16 @@ main.wl-page, main.wl-auth{
   min-width: 220px;
   justify-content:flex-end;
 }
-
 .wl-actions select, .wl-actions button{
-  max-width: 140px;
+  max-width: 160px;
 }
 
 /* FOOTER */
 .wl-footer{
   border-top: 1px solid var(--wl-border);
-  padding: 18px 0;
-  opacity: 0.95;
+  padding: 20px 0;
+  opacity: 0.98;
+  background: transparent;
 }
 
 .wl-footer__inner{
@@ -82,9 +86,7 @@ main.wl-page, main.wl-auth{
   justify-content:space-between;
 }
 
-.wl-footer__col{
-  min-width: 200px;
-}
+.wl-footer__col{ min-width: 200px; }
 
 .wl-footer__col h4{
   margin: 0 0 8px;
@@ -104,12 +106,13 @@ main.wl-page, main.wl-auth{
   background: var(--wl-card);
   border: 1px solid var(--wl-border);
   border-radius: 14px;
+  box-shadow: var(--shadow-sm);
 }
 
 .wl-cards{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 14px;
   margin-top: 16px;
 }
 
@@ -119,7 +122,7 @@ main.wl-page, main.wl-auth{
   margin: 0 auto;
   display:grid;
 
-  /* ✅ Slightly wider sidebar reads more “app-like” */
+  /* Slightly wider sidebar reads more “app-like” */
   grid-template-columns: 280px 1fr;
 
   gap: 18px;
@@ -132,9 +135,11 @@ main.wl-page, main.wl-auth{
   padding: 12px;
   height: fit-content;
   position: sticky;
-  top: 64px; /* below header */
+  top: 76px; /* ✅ slightly more breathing room below header */
+  box-shadow: var(--shadow-sm);
 }
 
+/* Nav */
 .wl-snav{
   display:flex;
   flex-direction:column;
@@ -146,22 +151,26 @@ main.wl-page, main.wl-auth{
   display:block !important;
   width:100%;
   box-sizing:border-box;
-  padding: 10px 10px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
   text-decoration:none;
   font-size: 14px;
-  opacity: .92;
+  opacity: .95;
   border: 1px solid transparent;
+  transition: background .12s ease, border-color .12s ease, transform .08s ease;
 }
 
+/* ✅ Light theme hover */
 .wl-sidebar .wl-snav__item:hover{
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(255,255,255,0.10);
+  background: rgba(15,23,42,0.04);
+  border-color: rgba(15,23,42,0.08);
+  transform: translateY(-1px);
 }
 
+/* ✅ Light theme active */
 .wl-sidebar .wl-snav__item.is-active{
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.18);
+  background: rgba(109,40,217,0.08);     /* uses brand purple vibe */
+  border-color: rgba(109,40,217,0.18);
   opacity: 1;
 }
 
@@ -172,6 +181,7 @@ main.wl-page, main.wl-auth{
   .wl-shell{
     grid-template-columns: 1fr;
   }
+
   .wl-sidebar{
     position: relative;
     top: auto;
@@ -182,8 +192,7 @@ main.wl-page, main.wl-auth{
   .wl-brand{ min-width: unset; }
 }
 
-/* ✅ IMPORTANT: remove the old hard cap that caused the “tight middle” look */
-/* (Your previous file had max-width:1100px here — that conflicts with the new system) */
+/* IMPORTANT: remove old hard cap that caused “tight middle” look */
 .wl-page{
   max-width: none;
   width: 100%;
