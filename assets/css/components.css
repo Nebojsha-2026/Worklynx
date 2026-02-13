@@ -15,27 +15,29 @@
   color: var(--text);
   font-weight: 800;
   cursor: pointer;
-  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease, color .12s ease;
   line-height: 1;
   box-shadow: var(--shadow-sm);
 }
 
+/* ✅ Brand-aware, but still pale/professional */
 .wl-btn:hover{
   transform: translateY(-1px);
-  border-color: rgba(15,23,42,0.16);
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
   box-shadow: var(--shadow-md);
-  background: #ffffff;
+}
+
+/* ✅ Focus ring stays pale and consistent */
+.wl-btn:focus-visible{
+  outline: none;
+  border-color: var(--brand-border);
+  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-sm);
 }
 
 .wl-btn:active{
   transform: translateY(0);
   box-shadow: var(--shadow-sm);
-}
-
-.wl-btn:focus-visible{
-  outline: none;
-  border-color: var(--brand-border);
-  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-sm);
 }
 
 .wl-btn:disabled{
@@ -50,7 +52,7 @@ a.wl-btn{
   width: fit-content;
 }
 
-/* Primary button */
+/* Primary button (explicit) */
 .wl-btn.wl-btn--primary{
   background: var(--brand);
   border-color: transparent;
@@ -65,6 +67,7 @@ a.wl-btn{
   outline: none;
   box-shadow: 0 0 0 3px var(--brand-soft), 0 14px 30px var(--brand-soft);
 }
+
 
 /* --------
    Form layout
