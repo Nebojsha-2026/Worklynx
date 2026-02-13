@@ -12,9 +12,14 @@
   --muted: rgba(255,255,255,0.68);
   --brand: #7c3aed;
   --brand2: #22c55e;
+
+  /* ✅ Global content width (increase this to utilize wide screens) */
+  --content-max: 1400px;
+  --content-pad: clamp(16px, 2vw, 28px);
 }
 
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
@@ -26,18 +31,36 @@ body {
 }
 
 a { color: inherit; text-decoration: none; }
-.container { width: min(1100px, 92vw); margin: 0 auto; padding: 26px 0; }
+
+/* ✅ Use more of the page width everywhere */
+.container {
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
+  margin: 0 auto;
+  padding: 26px 0;
+}
 
 .nav {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 14px 0;
 }
-.brand { display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:0.2px; }
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:800;
+  letter-spacing:0.2px;
+}
+
 .badge {
   border: 1px solid var(--border);
-  padding: 6px 10px; border-radius: 999px;
+  padding: 6px 10px;
+  border-radius: 999px;
   background: rgba(255,255,255,0.06);
-  color: var(--muted); font-size: 13px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .hero { display:grid; gap: 18px; padding: 60px 0 30px; }
@@ -45,17 +68,25 @@ a { color: inherit; text-decoration: none; }
 .hero p { color: var(--muted); font-size: 1.05rem; margin: 0; max-width: 58ch; }
 
 .row { display:flex; gap:12px; flex-wrap: wrap; margin-top: 14px; }
+
 .btn {
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.06);
   color: var(--text);
   padding: 12px 14px;
   border-radius: 12px;
-  display:inline-flex; align-items:center; gap:10px;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
   font-weight: 750;
   cursor: pointer;
 }
-.btn.primary { background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.7)); border: none; }
+
+.btn.primary {
+  background: linear-gradient(135deg, rgba(124,58,237,0.9), rgba(34,197,94,0.7));
+  border: none;
+}
+
 .btn:hover { transform: translateY(-1px); }
 
 .grid {
@@ -64,12 +95,14 @@ a { color: inherit; text-decoration: none; }
   gap: 14px;
   margin-top: 22px;
 }
+
 .card {
   border: 1px solid var(--border);
   background: var(--card);
   border-radius: 18px;
   padding: 16px;
 }
+
 .card h3 { margin: 0 0 8px; }
 .card p { margin: 0; color: var(--muted); line-height: 1.5; }
 
@@ -80,10 +113,9 @@ a { color: inherit; text-decoration: none; }
   padding: 18px;
 }
 
-.form {
-  display:grid; gap: 12px;
-}
+.form { display:grid; gap: 12px; }
 label { font-size: 13px; color: var(--muted); }
+
 input, select {
   width: 100%;
   padding: 12px 12px;
@@ -93,6 +125,7 @@ input, select {
   color: var(--text);
   outline: none;
 }
+
 .notice {
   display:none;
   border: 1px solid var(--border);
@@ -104,29 +137,36 @@ input, select {
 .notice.success { border-color: rgba(34,197,94,0.7); }
 
 .topbar {
-  display:flex; justify-content: space-between; align-items:center; gap: 10px;
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  gap: 10px;
   padding: 10px 0 18px;
 }
+
 .kpi { display:flex; gap: 10px; flex-wrap: wrap; }
-.kpi .pill { border: 1px solid var(--border); padding: 8px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); color: var(--muted); }
+.kpi .pill {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--muted);
+}
 
 .actions { display:flex; gap: 12px; flex-wrap: wrap; }
 
-/* Center content area nicely */
-#wlContent {
-  width: 100%;
-}
+/* ✅ Center content area but allow it to be wider */
+#wlContent { width: 100%; }
 
 #wlContent .wl-page {
-  max-width: 1100px;
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
 }
 
-/* Prevent the two-column row from stretching panels to equal height */
-.wl-form__row--top {
+/* ✅ Prevent "Upcoming shifts" column stretching to match the taller column */
+.wl-form__row {
   align-items: start;
 }
-
-.wl-form__row--top > section {
+.wl-form__row > section {
   align-self: start;
 }
