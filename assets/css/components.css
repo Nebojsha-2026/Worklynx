@@ -15,7 +15,7 @@
   color: var(--text);
   font-weight: 800;
   cursor: pointer;
-  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease, filter .12s ease;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
   line-height: 1;
   box-shadow: var(--shadow-sm);
 }
@@ -55,19 +55,15 @@ a.wl-btn{
   background: var(--brand);
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--brand) 22%, transparent);
+  box-shadow: 0 10px 24px var(--brand-soft);
 }
-
 .wl-btn.wl-btn--primary:hover{
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--brand) 28%, transparent);
+  box-shadow: 0 14px 30px var(--brand-soft);
   filter: saturate(1.05);
 }
-
 .wl-btn.wl-btn--primary:focus-visible{
   outline: none;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent),
-    0 14px 30px color-mix(in srgb, var(--brand) 28%, transparent);
+  box-shadow: 0 0 0 3px var(--brand-soft), 0 14px 30px var(--brand-soft);
 }
 
 /* --------
@@ -204,7 +200,7 @@ a.wl-btn{
 }
 
 /* --------
-   Badges / Chips / Pills (soft surface)
+   Badges / Chips / Pills
 -------- */
 .wl-badge,
 .wl-chip,
@@ -317,7 +313,6 @@ a.wl-btn{
   box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-sm);
 }
 
-/* ✅ Active uses org brand */
 .wl-filter.is-active{
   background: var(--brand-soft);
   border-color: var(--brand-border);
