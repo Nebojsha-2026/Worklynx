@@ -1,20 +1,23 @@
 /* assets/css/themes.css */
 
 :root{
-  /* Layout + components tokens */
-  --wl-max: 1200px;     /* was 1100px -> uses more screen width */
-  --wl-pad: 20px;       /* a bit more breathing room */
+  /* Layout */
+  --wl-max: 1200px;
+  --wl-pad: 20px;
 
-  /* Core surfaces */
-  --bg: #f6f7fb;        /* app background */
-  --wl-card: #ffffff;   /* card surface */
-  --wl-border: rgba(15, 23, 42, 0.10); /* subtle border */
+  /* Core colors (LIGHT THEME) */
+  --bg: #f8fafc;                 /* page background */
+  --wl-card: #ffffff;            /* cards */
+  --wl-border: rgba(15,23,42,0.12);
 
-  /* Text */
-  --text: rgba(15, 23, 42, 0.92);      /* slate-900-ish */
-  --muted: rgba(15, 23, 42, 0.62);
+  --text: #0f172a;               /* slate-900 */
+  --muted: #475569;              /* slate-600 */
 
   /* Brand */
-  --brand: #6d28d9;     /* slightly deeper purple for “pro” look */
-  --brand2: #16a34a;    /* green accent */
+  --brand: #6d28d9;              /* purple-700 */
+  --brand2: #22c55e;             /* green */
+
+  /* Effects */
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+  --shadow-md: 0 10px 24px rgba(15,23,42,0.08);
 }
