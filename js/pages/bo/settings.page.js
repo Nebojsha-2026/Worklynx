@@ -103,7 +103,6 @@ function buildThemeFromBrandHex(hex) {
   const rgb = hexToRgb(hex);
   if (!rgb) return null;
 
-  // “soft” and “border” variants used across your CSS
   return {
     brand: hex,
     brandSoft: `rgba(${rgb.r},${rgb.g},${rgb.b},0.14)`,
@@ -111,31 +110,75 @@ function buildThemeFromBrandHex(hex) {
   };
 }
 
-function fillForm(fromOrg) {
-  nameEl.value = fromOrg.name || "";
-  logoEl.value = fromOrg.company_logo_url || "";
+function applyThemeVars(theme) {
+  if (!theme) return;
+  const root = document.documentElement;
+  if (theme.brand) root.style.setProperty("--brand", theme.brand);
+  if (theme.brandSoft) root.style.setProperty("--brand-soft", theme.brandSoft);
+  if (theme.brandBorder) root.style.setProperty("--brand-border", theme.brandBorder);
+}
 
-  // fallback if theme not set yet
-  const brand = fromOrg.theme?.brand || "#6d28d9";
+/**
+ * Best-effort header update without relying on internal header.js structure.
+ * If selectors change later, worst case: header won't auto-update, but save still works.
+ */
+function updateHeaderUI({ name, company_logo_url }) {
+  // update title (optional)
+  if (name) document.title = `Company Settings • ${name}`;
+
+  // common header patterns
+  const nameTargets = [
+    ".wl-org strong",
+    ".wl-org .wl-org__name",
+    ".wl-brand strong",
+  ];
+
+  for (const sel of nameTargets) {
+    const el = document.querySelector(sel);
+    if (el && name) el.textContent = name;
+  }
+
+  const logoTargets = [
+    ".wl-org img",
+    ".wl-brand img",
+  ];
+
+  for (const sel of logoTargets) {
+    const img = document.querySelector(sel);
+    if (img) {
+      img.src = company_logo_url || "/assets/images/placeholder-company-logo.png";
+    }
+  }
+}
+
+function fillForm(fromOrg) {
+  nameEl.value = fromOrg?.name || "";
+  logoEl.value = fromOrg?.company_logo_url || "";
+
+  const brand = fromOrg?.theme?.brand || "#6d28d9";
   brandEl.value = brand;
+
+  // also apply loaded theme to preview instantly
+  applyThemeVars(buildThemeFromBrandHex(brand) || fromOrg?.theme);
 }
 
 fillForm(org);
 
-brandEl.addEventListener("input", async () => {
-  // Apply preview live
+brandEl.addEventListener("input", () => {
   const theme = buildThemeFromBrandHex(brandEl.value);
   if (!theme) return;
-
-  document.documentElement.style.setProperty("--brand", theme.brand);
-  document.documentElement.style.setProperty("--brand-soft", theme.brandSoft);
-  document.documentElement.style.setProperty("--brand-border", theme.brandBorder);
+  applyThemeVars(theme);
 });
 
 resetBtn.addEventListener("click", async () => {
-  const fresh = await refreshOrgContext();
-  fillForm(fresh);
-  showSuccess("Reset to saved settings.");
+  try {
+    const fresh = await refreshOrgContext();
+    fillForm(fresh);
+    showSuccess("Reset to saved settings.");
+  } catch (e) {
+    console.error(e);
+    showError(e?.message || "Failed to reset.");
+  }
 });
 
 saveBtn.addEventListener("click", async () => {
@@ -146,22 +189,22 @@ saveBtn.addEventListener("click", async () => {
     if (!newName) throw new Error("Company name is required.");
 
     const logoUrl = logoEl.value.trim();
-
     const theme = buildThemeFromBrandHex(brandEl.value);
     if (!theme) throw new Error("Invalid brand color.");
 
-    const updated = await updateOrganization(org.id, {
+    await updateOrganization(org.id, {
       name: newName,
       company_logo_url: logoUrl || null,
       theme,
     });
 
     // refresh cached org + apply theme
-    await refreshOrgContext();
+    const fresh = await refreshOrgContext();
 
-    // If your header renders company name/logo from orgContext on page load,
-    // a full refresh will update the header immediately.
-    showSuccess("Saved successfully. Refresh the page to see header updates if needed.");
+    // ensure header updates immediately
+    updateHeaderUI(fresh);
+
+    showSuccess("Saved successfully.");
   } catch (e) {
     console.error(e);
     showError(e?.message || "Failed to save settings.");
