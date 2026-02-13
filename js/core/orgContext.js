@@ -49,6 +49,14 @@ export async function loadOrgContext() {
   return data;
 }
 
+/**
+ * Force-refresh org context (use after BO saves settings).
+ */
+export async function refreshOrgContext() {
+  cachedOrg = null;
+  return loadOrgContext();
+}
+
 export function clearOrgContext() {
   cachedOrg = null;
 }
