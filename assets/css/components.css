@@ -1,6 +1,8 @@
 /* assets/css/components.css */
 
-/* Buttons */
+/* --------
+   Buttons
+-------- */
 .wl-btn{
   display:inline-flex;
   align-items:center;
@@ -13,12 +15,16 @@
   color: var(--text);
   font-weight: 800;
   cursor: pointer;
-  transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  line-height: 1;
 }
 .wl-btn:hover{
   transform: translateY(-1px);
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.18);
+}
+.wl-btn:active{
+  transform: translateY(0);
 }
 .wl-btn:disabled{
   opacity: .6;
@@ -26,7 +32,14 @@
   transform: none;
 }
 
-/* Form layout */
+/* Optional: make link-buttons behave nicely inside grids */
+a.wl-btn{
+  width: fit-content;
+}
+
+/* --------
+   Form layout
+-------- */
 .wl-form{
   display:grid;
   gap: 12px;
@@ -37,6 +50,7 @@
   display:grid;
   gap: 12px;
   grid-template-columns: 1fr 1fr;
+  align-items: start; /* ✅ prevent equal-height stretching */
 }
 @media (max-width: 900px){
   .wl-form__row{ grid-template-columns: 1fr; }
@@ -73,13 +87,49 @@
   box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
 }
 
-/* Card section spacing (so it doesn't feel like a giant slab) */
-/* Card section spacing (so it doesn't feel like a giant slab) */
+/* --------
+   Panels / Cards
+-------- */
+
+/* Panel padding */
 .wl-panel{
   padding: 18px;
 }
 
-/* Result / alerts */
+/* Make panels look less “slabby” when content is short */
+.wl-panel > :first-child{
+  margin-top: 0;
+}
+.wl-panel > :last-child{
+  margin-bottom: 0;
+}
+
+/* Cards should not force height */
+.wl-card{
+  height: auto;
+}
+
+/* A simple vertical rhythm helper for stacked content */
+.wl-stack{
+  display:grid;
+  gap: 10px;
+}
+
+/* Improve headings/subhead spacing inside panels */
+.wl-panel h1,
+.wl-panel h2,
+.wl-panel h3{
+  margin: 0;
+}
+.wl-panel .wl-subtext{
+  font-size: 13px;
+  opacity: .8;
+  margin-top: 6px;
+}
+
+/* --------
+   Alerts
+-------- */
 .wl-alert{
   border: 1px solid var(--wl-border);
   border-radius: 12px;
@@ -89,7 +139,9 @@
 .wl-alert--error{ border-color: rgba(239,68,68,0.55); }
 .wl-alert--success{ border-color: rgba(34,197,94,0.55); }
 
-/* Shift status badge */
+/* --------
+   Badges
+-------- */
 .wl-badge{
   display:inline-flex;
   align-items:center;
@@ -124,7 +176,9 @@
   background: rgba(59,130,246,0.12);
 }
 
-/* Assigned employee chips */
+/* --------
+   Chips / Pills
+-------- */
 .wl-chips{
   display:flex;
   gap:6px;
@@ -157,6 +211,7 @@
   background: rgba(255,255,255,0.06);
   opacity: .95;
 }
+
 /* Employee polish */
 .wl-card.is-cancelled {
   opacity: 0.75;
@@ -190,8 +245,4 @@
   background: rgba(255,255,255,0.14);
   border-color: rgba(255,255,255,0.22);
   opacity: 1;
-}
-/* Stop grid rows stretching panels to equal height */
-.wl-form__row {
-  align-items: start;
 }
