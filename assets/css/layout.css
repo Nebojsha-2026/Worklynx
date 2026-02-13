@@ -175,9 +175,10 @@ main.wl-page, main.wl-auth{
 }
 
 /* Light theme active */
+
 .wl-sidebar .wl-snav__item.is-active{
-  background: rgba(109,40,217,0.08);
-  border-color: rgba(109,40,217,0.18);
+  background: var(--brand-soft);
+  border-color: var(--brand-border);
   opacity: 1;
 }
 
