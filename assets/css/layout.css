@@ -1,4 +1,6 @@
 /* assets/css/layout.css */
+
+/* Keep body layout */
 body{
   margin:0;
   min-height:100vh;
@@ -6,8 +8,9 @@ body{
   flex-direction:column;
 }
 
+/* ✅ Main pages use the global width vars (from app.css) */
 main.wl-page, main.wl-auth{
-  width: min(var(--wl-max), calc(100% - (var(--wl-pad) * 2)));
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
   padding: 24px 0 32px;
   flex: 1;
@@ -23,7 +26,7 @@ main.wl-page, main.wl-auth{
 }
 
 .wl-header__inner{
-  width: min(var(--wl-max), calc(100% - (var(--wl-pad) * 2)));
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
   padding: 10px 0;
   display:flex;
@@ -70,7 +73,7 @@ main.wl-page, main.wl-auth{
 }
 
 .wl-footer__inner{
-  width: min(var(--wl-max), calc(100% - (var(--wl-pad) * 2)));
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
   display:flex;
   gap: 18px;
@@ -112,15 +115,19 @@ main.wl-page, main.wl-auth{
 
 /* SIDEBAR LAYOUT (desktop default) */
 .wl-shell{
-  width: min(var(--wl-max), calc(100% - (var(--wl-pad) * 2)));
+  width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
   display:grid;
-  grid-template-columns: 260px 1fr;
-  gap: 14px;
+
+  /* ✅ Slightly wider sidebar reads more “app-like” */
+  grid-template-columns: 280px 1fr;
+
+  gap: 18px;
   padding: 18px 0 32px;
   align-items: start;
 }
 
+/* Sidebar */
 .wl-sidebar{
   padding: 12px;
   height: fit-content;
@@ -174,9 +181,11 @@ main.wl-page, main.wl-auth{
   .wl-actions{ min-width: unset; }
   .wl-brand{ min-width: unset; }
 }
-/* Center content inside the main area */
-.wl-page {
-  max-width: 1100px;
-  margin: 0 auto;
+
+/* ✅ IMPORTANT: remove the old hard cap that caused the “tight middle” look */
+/* (Your previous file had max-width:1100px here — that conflicts with the new system) */
+.wl-page{
+  max-width: none;
   width: 100%;
+  margin: 0;
 }
