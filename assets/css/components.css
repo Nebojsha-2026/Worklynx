@@ -15,7 +15,7 @@
   color: var(--text);
   font-weight: 800;
   cursor: pointer;
-  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease, filter .12s ease;
   line-height: 1;
   box-shadow: var(--shadow-sm);
 }
@@ -34,8 +34,8 @@
 
 .wl-btn:focus-visible{
   outline: none;
-  border-color: rgba(109,40,217,0.35);
-  box-shadow: 0 0 0 3px rgba(109,40,217,0.14), var(--shadow-sm);
+  border-color: var(--brand-border);
+  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-sm);
 }
 
 .wl-btn:disabled{
@@ -55,15 +55,19 @@ a.wl-btn{
   background: var(--brand);
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 10px 24px rgba(109,40,217,0.18);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--brand) 22%, transparent);
 }
+
 .wl-btn.wl-btn--primary:hover{
-  box-shadow: 0 14px 30px rgba(109,40,217,0.22);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--brand) 28%, transparent);
   filter: saturate(1.05);
 }
+
 .wl-btn.wl-btn--primary:focus-visible{
   outline: none;
-  box-shadow: 0 0 0 3px rgba(109,40,217,0.20), 0 14px 30px rgba(109,40,217,0.22);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent),
+    0 14px 30px color-mix(in srgb, var(--brand) 28%, transparent);
 }
 
 /* --------
@@ -126,8 +130,8 @@ a.wl-btn{
 .wl-form input:focus,
 .wl-form select:focus,
 .wl-form textarea:focus{
-  border-color: rgba(109,40,217,0.35);
-  box-shadow: 0 0 0 3px rgba(109,40,217,0.14);
+  border-color: var(--brand-border);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .wl-form input:disabled,
@@ -309,11 +313,12 @@ a.wl-btn{
 
 .wl-filter:focus-visible{
   outline: none;
-  border-color: rgba(109,40,217,0.35);
-  box-shadow: 0 0 0 3px rgba(109,40,217,0.14), var(--shadow-sm);
+  border-color: var(--brand-border);
+  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-sm);
 }
 
+/* ✅ Active uses org brand */
 .wl-filter.is-active{
-  background: rgba(109,40,217,0.10);
-  border-color: rgba(109,40,217,0.25);
+  background: var(--brand-soft);
+  border-color: var(--brand-border);
 }
