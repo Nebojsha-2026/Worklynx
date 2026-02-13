@@ -20,9 +20,12 @@ export function renderHeader({ companyName, companyLogoUrl }) {
       </div>
 
       <div class="wl-org">
-        <img src="${orgLogo}" alt="Company" onerror="this.src='${path("/assets/images/placeholder-company-logo.png")}'">
+        <img id="wlHeaderOrgLogo" src="${orgLogo}" alt="Company"
+             onerror="this.src='${path("/assets/images/placeholder-company-logo.png")}'">
         <div>
-          <div style="font-weight:700; line-height:1.2;">${escapeHtml(companyName || "Your Company")}</div>
+          <div id="wlHeaderOrgName" style="font-weight:700; line-height:1.2;">
+            ${escapeHtml(companyName || "Your Company")}
+          </div>
           <div style="font-size:12px; opacity:.85; line-height:1.2;">Timesheets & shift management</div>
         </div>
       </div>
@@ -114,6 +117,23 @@ export function renderHeader({ companyName, companyLogoUrl }) {
   header.querySelector("#wlBell").addEventListener("click", () => {
     alert("Notifications (coming soon)");
   });
+
+  // ✅ Live header updates when org context changes (name/logo/theme save)
+  function onOrgUpdated(e) {
+    const org = e.detail;
+
+    const nameEl = header.querySelector("#wlHeaderOrgName");
+    const logoEl = header.querySelector("#wlHeaderOrgLogo");
+
+    if (nameEl && org?.name) nameEl.textContent = org.name;
+
+    if (logoEl) {
+      logoEl.src =
+        org?.company_logo_url || path("/assets/images/placeholder-company-logo.png");
+    }
+  }
+
+  window.addEventListener("wl:org-updated", onOrgUpdated);
 
   return header;
 }
