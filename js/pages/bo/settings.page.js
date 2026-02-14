@@ -253,11 +253,15 @@ saveBtn.addEventListener("click", async () => {
 
     if (removeLogo) {
       nextLogoUrl = null;
-    } else if (selectedLogoFile) {
-      logoStatusEl.textContent = "Uploading logo…";
-      nextLogoUrl = await uploadLogoToStorage({ orgId: org.id, file: selectedLogoFile });
-      logoStatusEl.textContent = "Logo uploaded.";
-    }
+  } else if (selectedLogoFile) {
+  logoStatusEl.textContent = "Uploading logo…";
+  const publicUrl = await uploadLogoToStorage({ orgId: org.id, file: selectedLogoFile });
+
+  // ✅ cache-bust so everyone instantly sees the newest upload
+  nextLogoUrl = `${publicUrl}?v=${Date.now()}`;
+
+  logoStatusEl.textContent = "Logo uploaded.";
+}
 
     await updateOrganization(org.id, {
       name: newName,
