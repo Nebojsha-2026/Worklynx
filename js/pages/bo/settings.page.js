@@ -206,6 +206,40 @@ resetBtn.addEventListener("click", async () => {
   }
 });
 
+/**
+ * Delete any existing logo.* files under this org folder.
+ * - If keepObjectPath is provided, deletes all other logo.* except that path.
+ * - If keepObjectPath is null, deletes ALL logo.* (used for "Remove logo").
+ */
+async function deleteOtherOrgLogos({ orgId, keepObjectPath = null }) {
+  const supabase = getSupabase();
+  const bucket = "org-logos";
+
+  const { data: files, error: listErr } = await supabase.storage
+    .from(bucket)
+    .list(String(orgId), { limit: 100, offset: 0 });
+
+  if (listErr) throw listErr;
+
+  const toDelete = (files || [])
+    .map((f) => `${orgId}/${f.name}`)
+    .filter((fullPath) => {
+      const name = (fullPath.split("/").pop() || "").toLowerCase();
+      const isLogo = name.startsWith("logo.");
+      const isKeep = keepObjectPath && fullPath === keepObjectPath;
+      return isLogo && !isKeep;
+    });
+
+  if (toDelete.length === 0) return;
+
+  const { error: delErr } = await supabase.storage.from(bucket).remove(toDelete);
+  if (delErr) throw delErr;
+}
+
+/**
+ * Upload logo to Supabase Storage and return public URL.
+ * Also auto-deletes old logo.* files when extension changes.
+ */
 async function uploadLogoToStorage({ orgId, file }) {
   const supabase = getSupabase();
   const bucket = "org-logos";
@@ -213,6 +247,9 @@ async function uploadLogoToStorage({ orgId, file }) {
   const ext = (file.name.split(".").pop() || "png").toLowerCase();
   const safeExt = ext.replace(/[^a-z0-9]/g, "") || "png";
   const objectPath = `${orgId}/logo.${safeExt}`;
+
+  // ✅ Clean up any other logo.* first (e.g. old logo.png when uploading logo.webp)
+  await deleteOtherOrgLogos({ orgId, keepObjectPath: objectPath });
 
   const { error: upErr } = await supabase.storage
     .from(bucket)
@@ -242,13 +279,19 @@ saveBtn.addEventListener("click", async () => {
     let nextLogoUrl = org.company_logo_url || null;
 
     if (removeLogo) {
+      // ✅ Delete all logo.* files in this org folder
+      logoStatusEl.textContent = "Removing logo…";
+      await deleteOtherOrgLogos({ orgId: org.id, keepObjectPath: null });
       nextLogoUrl = null;
+      logoStatusEl.textContent = "Logo removed.";
     } else if (selectedLogoFile) {
       logoStatusEl.textContent = "Uploading logo…";
       const publicUrl = await uploadLogoToStorage({
         orgId: org.id,
         file: selectedLogoFile,
       });
+
+      // ✅ cache-bust so everyone sees the newest upload
       nextLogoUrl = `${publicUrl}?v=${Date.now()}`;
       logoStatusEl.textContent = "Logo uploaded.";
     }
