@@ -45,7 +45,9 @@ content.innerHTML = `
         <div class="wl-subtext">Recommended: square PNG 256×256 or 512×512. Max ~2MB.</div>
 
         <div style="display:flex; gap:12px; align-items:center; margin-top:10px;">
-          <img id="logoPreview" alt="Logo preview" style="width:44px; height:44px; border-radius:10px; border:1px solid var(--wl-border); object-fit:cover; background:#fff;" />
+          <img id="logoPreview" alt="Logo preview"
+               style="width:44px; height:44px; border-radius:10px; border:1px solid var(--wl-border);
+               object-fit:cover; background:#fff;" />
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="wl-btn" id="removeLogoBtn" type="button">Remove logo</button>
             <div class="wl-subtext" id="logoStatus" style="margin:0;"></div>
@@ -90,7 +92,6 @@ const resetBtn = $("#resetBtn");
 const successBox = $("#successBox");
 const errorBox = $("#errorBox");
 
-// local state
 let selectedLogoFile = null;
 let removeLogo = false;
 
@@ -119,7 +120,6 @@ function hexToRgb(hex) {
 function buildThemeFromBrandHex(hex) {
   const rgb = hexToRgb(hex);
   if (!rgb) return null;
-
   return {
     brand: hex,
     brandSoft: `rgba(${rgb.r},${rgb.g},${rgb.b},0.14)`,
@@ -146,11 +146,10 @@ function fillForm(fromOrg) {
   brandEl.value = brand;
   applyThemeVars(buildThemeFromBrandHex(brand) || fromOrg?.theme);
 
-  // logo preview
   setLogoPreview(fromOrg?.company_logo_url || "");
-  logoStatusEl.textContent = fromOrg?.company_logo_url ? "Current logo loaded." : "No logo set.";
+  logoStatusEl.textContent =
+    fromOrg?.company_logo_url ? "Current logo loaded." : "No logo set.";
 
-  // reset logo state
   selectedLogoFile = null;
   removeLogo = false;
   logoFileEl.value = "";
@@ -158,19 +157,16 @@ function fillForm(fromOrg) {
 
 fillForm(org);
 
-// Live theme preview
 brandEl.addEventListener("input", () => {
   const theme = buildThemeFromBrandHex(brandEl.value);
   if (!theme) return;
   applyThemeVars(theme);
 });
 
-// File selection
 logoFileEl.addEventListener("change", () => {
   const file = logoFileEl.files?.[0] || null;
   if (!file) return;
 
-  // basic guard
   if (file.size > 2 * 1024 * 1024) {
     logoFileEl.value = "";
     showError("Logo file is too large. Please keep it under ~2MB.");
@@ -180,13 +176,11 @@ logoFileEl.addEventListener("change", () => {
   selectedLogoFile = file;
   removeLogo = false;
 
-  // instant local preview
   const objectUrl = URL.createObjectURL(file);
   setLogoPreview(objectUrl);
   logoStatusEl.textContent = `Selected: ${file.name}`;
 });
 
-// Remove logo
 removeLogoBtn.addEventListener("click", () => {
   selectedLogoFile = null;
   removeLogo = true;
@@ -198,6 +192,11 @@ removeLogoBtn.addEventListener("click", () => {
 resetBtn.addEventListener("click", async () => {
   try {
     const fresh = await refreshOrgContext();
+
+    org.company_logo_url = fresh.company_logo_url;
+    org.name = fresh.name;
+    org.theme = fresh.theme;
+
     fillForm(fresh);
     updateHeaderOrg(fresh);
     showSuccess("Reset to saved settings.");
@@ -207,18 +206,12 @@ resetBtn.addEventListener("click", async () => {
   }
 });
 
-/**
- * Upload logo to Supabase Storage and return public URL.
- */
 async function uploadLogoToStorage({ orgId, file }) {
   const supabase = getSupabase();
   const bucket = "org-logos";
 
-  // keep extension
   const ext = (file.name.split(".").pop() || "png").toLowerCase();
   const safeExt = ext.replace(/[^a-z0-9]/g, "") || "png";
-
-  // stable key per org (upsert overwrites)
   const objectPath = `${orgId}/logo.${safeExt}`;
 
   const { error: upErr } = await supabase.storage
@@ -232,10 +225,8 @@ async function uploadLogoToStorage({ orgId, file }) {
   if (upErr) throw upErr;
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(objectPath);
-  const url = data?.publicUrl;
-
-  if (!url) throw new Error("Could not get public URL for uploaded logo.");
-  return url;
+  if (!data?.publicUrl) throw new Error("Could not get public URL.");
+  return data.publicUrl;
 }
 
 saveBtn.addEventListener("click", async () => {
@@ -248,22 +239,17 @@ saveBtn.addEventListener("click", async () => {
     const theme = buildThemeFromBrandHex(brandEl.value);
     if (!theme) throw new Error("Invalid brand color.");
 
-        // ✅ handle logo
     let nextLogoUrl = org.company_logo_url || null;
 
     if (removeLogo) {
       nextLogoUrl = null;
     } else if (selectedLogoFile) {
       logoStatusEl.textContent = "Uploading logo…";
-
       const publicUrl = await uploadLogoToStorage({
         orgId: org.id,
         file: selectedLogoFile,
       });
-
-      // ✅ cache-bust so everyone instantly sees the newest upload
       nextLogoUrl = `${publicUrl}?v=${Date.now()}`;
-
       logoStatusEl.textContent = "Logo uploaded.";
     }
 
@@ -275,8 +261,16 @@ saveBtn.addEventListener("click", async () => {
 
     const fresh = await refreshOrgContext();
 
-    // ✅ update header live (org area only)
+    // keep local org in sync
+    org.company_logo_url = fresh.company_logo_url;
+    org.name = fresh.name;
+    org.theme = fresh.theme;
+
     updateHeaderOrg(fresh);
+
+    selectedLogoFile = null;
+    removeLogo = false;
+    logoFileEl.value = "";
 
     showSuccess("Saved successfully.");
   } catch (e) {
