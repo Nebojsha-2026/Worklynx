@@ -14,7 +14,6 @@ await requireRole(["EMPLOYEE"]);
 const org = await loadOrgContext();
 const supabase = getSupabase();
 
-// Header + footer
 document.body.prepend(
   renderHeader({
     companyName: org.name,
@@ -23,7 +22,6 @@ document.body.prepend(
 );
 document.body.append(renderFooter({ version: "v0.1.0" }));
 
-// Shell
 const main = document.querySelector("main");
 main.innerHTML = `
   <div class="wl-shell">
@@ -34,63 +32,55 @@ main.innerHTML = `
 main.querySelector("#wlSidebar").append(renderSidebar("EMPLOYEE"));
 
 const content = main.querySelector("#wlContent");
-
-// NOTE: Added wl-page container so we can center content cleanly with CSS.
 content.innerHTML = `
-  <div class="wl-page">
-    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+  <div class="wl-page employee-dashboard">
+    <section class="employee-dashboard__hero wl-card wl-panel">
+    
       <div>
-        <h1 style="margin:0;">Dashboard</h1>
-        <div style="font-size:13px; opacity:.8; margin-top:6px;">
-          Your shifts, time tracking, and earnings.
-        </div>
+        <h1 class="employee-dashboard__title">Dashboard</h1>
+        <p class="employee-dashboard__subtitle">Your shifts, time tracking, and earnings in one place.</p>
       </div>
-      <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
-    </div>
-
-    <!-- TOP SUMMARY: keep only This Week -->
-    <section class="wl-card wl-panel" style="margin-top:12px;">
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-        <div class="wl-card wl-panel" style="padding:14px; min-width:0;">
-          <div style="font-size:12px; opacity:.8;">This week</div>
-          <div id="cardWeek" style="font-size:22px; font-weight:900; margin-top:6px;">—</div>
-          <div style="font-size:12px; opacity:.7; margin-top:6px;">Mon → today</div>
-        </div>
-      </div>
+      
+       <a class="wl-btn wl-btn--primary" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
     </section>
 
-    <!-- TODAY (this is enough; no need Next shift card above) -->
-    <section class="wl-card wl-panel" style="margin-top:12px;">
-      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+    <section class="employee-dashboard__metrics">
+      <article class="employee-metric-card wl-card wl-panel">
+        <p class="employee-metric-card__label">This week</p>
+        <div id="cardWeek" class="employee-metric-card__value">—</div>
+        <p class="employee-metric-card__hint">Mon → today</p>
+      </article>
+    </section>
+
+    <section class="employee-dashboard__today wl-card wl-panel">
+      <div class="employee-dashboard__today-head">
         <div>
-          <div style="font-weight:900;">Today</div>
-          <div style="font-size:13px; opacity:.8; margin-top:4px;" id="todaySub">Loading…</div>
+          <h2 class="employee-section-title">Today</h2>
+          <p class="employee-section-subtitle" id="todaySub">Loading…</p>
         </div>
         <div id="todayPill"></div>
       </div>
-      <div id="todayBody" style="margin-top:12px;"></div>
+      <div id="todayBody" class="employee-dashboard__today-body"></div>
     </section>
 
-    <div class="wl-form__row wl-form__row--top" style="margin-top:12px;">
+    <div class="employee-dashboard__grid">
       <section class="wl-card wl-panel">
-        <div style="font-weight:900;">Upcoming shifts</div>
-        <div style="font-size:13px; opacity:.8; margin-top:6px;">Next 14 days</div>
-        <div id="upcomingList" style="display:grid; gap:10px; margin-top:12px;"></div>
+        <h2 class="employee-section-title">Upcoming shifts</h2>
+        <p class="employee-section-subtitle">Next 14 days</p>
+        <div id="upcomingList" class="employee-list"></div>
       </section>
 
       <section class="wl-card wl-panel">
-        <div style="font-weight:900;">Earnings</div>
-        <div style="font-size:13px; opacity:.8; margin-top:6px;">
-          Based on the ledger (posted after clock-out or shift end).
-        </div>
+        <h2 class="employee-section-title">Earnings</h2>
+        <p class="employee-section-subtitle">Based on the ledger (posted after clock-out or shift end).</p>
 
         <div id="earningsBox" style="margin-top:12px;">
           <div style="opacity:.85;">Loading…</div>
         </div>
 
-        <div style="margin-top:12px;">
-          <div style="font-weight:900;">Recent earnings</div>
-          <div id="recentEarnings" style="display:grid; gap:10px; margin-top:10px;"></div>
+        <div style="margin-top:16px;">
+          <h3 class="employee-section-title" style="font-size:16px;">Recent earnings</h3>
+          <div id="recentEarnings" class="employee-list" style="margin-top:10px;"></div>
         </div>
       </section>
     </div>
@@ -127,12 +117,9 @@ try {
   recentEarningsEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load recent earnings.</div>`;
 }
 
-/* --------------------------
-   Data
---------------------------- */
 
 async function loadUpcomingAssignedShifts({ days }) {
-  const assigns = await listMyShiftAssignments(); // expects [{ shift_id, ... }]
+ const assigns = await listMyShiftAssignments();
   const ids = (assigns || []).map((a) => a.shift_id).filter(Boolean);
   if (!ids.length) return [];
 
@@ -140,11 +127,7 @@ async function loadUpcomingAssignedShifts({ days }) {
   const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
   const dayStart = startOfDay(now).getTime();
 
-  const { data: shifts, error } = await supabase
-    .from("shifts")
-    .select("*")
-    .in("id", ids)
-    .limit(500);
+  const { data: shifts, error } = await supabase.from("shifts").select("*").in("id", ids).limit(500);
 
   if (error) throw error;
 
@@ -187,11 +170,7 @@ async function getActiveClockedInShift({ userId }) {
     const shiftId = row.timesheets?.shift_id;
     if (!shiftId) return null;
 
-    const { data: shift, error: sErr } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("id", shiftId)
-      .single();
+    const { data: shift, error: sErr } = await supabase.from("shifts").select("*").eq("id", shiftId).single();
 
     if (sErr || !shift) return null;
 
@@ -202,9 +181,6 @@ async function getActiveClockedInShift({ userId }) {
   }
 }
 
-/* --------------------------
-   Render
---------------------------- */
 
 function renderToday({ upcoming, active }) {
   const now = new Date();
@@ -218,9 +194,7 @@ function renderToday({ upcoming, active }) {
     todaySubEl.textContent = "You are currently clocked in.";
     todayPillEl.innerHTML = `<span class="wl-badge wl-badge--active">Clocked in</span>`;
 
-    const since = active.timeEntry?.clock_in
-      ? new Date(active.timeEntry.clock_in).toLocaleString()
-      : "";
+    const since = active.timeEntry?.clock_in ? new Date(active.timeEntry.clock_in).toLocaleString() : "";
 
     todayBodyEl.innerHTML = `
       <div class="wl-alert">
@@ -292,9 +266,7 @@ function renderToday({ upcoming, active }) {
 function renderUpcoming(shifts) {
   if (!shifts.length) {
     upcomingListEl.innerHTML = `
-      <div class="wl-alert" style="opacity:.95;">
-        No upcoming shifts.
-      </div>
+      <div class="wl-alert" style="opacity:.95;">No upcoming shifts.</div>
       <a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
         View all shifts →
       </a>
@@ -309,12 +281,8 @@ function renderUpcoming(shifts) {
     ${slice.map(renderShiftCard).join("")}
     ${
       shifts.length > max
-        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
-             See more shifts →
-           </a>`
-        : `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">
-             View all shifts →
-           </a>`
+        ? `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">See more shifts →</a>`
+        : `<a class="wl-btn" href="${path("/app/employee/my-shifts.html")}" style="margin-top:6px; justify-self:start;">View all shifts →</a>`
     }
   `;
 }
@@ -327,20 +295,18 @@ function renderShiftCard(s) {
   const needsTracking = s.track_time === false ? false : true;
 
   return `
-    <a class="wl-card wl-panel ${isCancelled ? "is-cancelled" : ""}" href="${href}" style="display:block;">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+    <a class="wl-card wl-panel employee-shift-card ${isCancelled ? "is-cancelled" : ""}" href="${href}">
+      <div class="employee-shift-card__row">
         <div style="min-width:0;">
-          <div style="font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${escapeHtml(s.title || "Untitled shift")}
-          </div>
-          <div style="opacity:.85; font-size:13px; margin-top:6px;">
+          <div class="employee-shift-card__title">${escapeHtml(s.title || "Untitled shift")}</div>
+          <div class="employee-shift-card__meta">
             <b>${escapeHtml(when)}</b> • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
             ${s.location ? ` • 📍 ${escapeHtml(s.location)}` : ""}
           </div>
           ${needsTracking ? "" : `<div style="font-size:13px; opacity:.85; margin-top:6px;">No tracking required</div>`}
         </div>
 
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex:0 0 auto;">
+        <div class="employee-shift-card__actions">
           ${renderStatusBadge(status)}
           <div style="opacity:.8; font-size:13px;">View →</div>
         </div>
@@ -349,9 +315,6 @@ function renderShiftCard(s) {
   `;
 }
 
-/* --------------------------
-   Earnings (Ledger-based)
---------------------------- */
 
 async function renderLedgerEarnings({ userId }) {
   const now = new Date();
@@ -364,24 +327,21 @@ async function renderLedgerEarnings({ userId }) {
     sumLedger({ userId, from: null, to: null }),
   ]);
 
-  // update top card
   cardWeekEl.textContent = fmtMoney(weekTotal);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
+    
       <div style="display:grid; gap:10px;">
-        <div style="display:flex; justify-content:space-between; gap:10px;">
-          <div style="opacity:.85;">This week</div>
-          <div style="font-weight:900;">${escapeHtml(fmtMoney(weekTotal))}</div>
-        </div>
-        <div style="display:flex; justify-content:space-between; gap:10px;">
-          <div style="opacity:.85;">This month</div>
-          <div style="font-weight:900;">${escapeHtml(fmtMoney(monthTotal))}</div>
-        </div>
-        <div style="display:flex; justify-content:space-between; gap:10px;">
-          <div style="opacity:.85;">All time</div>
-          <div style="font-weight:900;">${escapeHtml(fmtMoney(allTimeTotal))}</div>
-        </div>
+       <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">This week</div><div style="font-weight:900;">${escapeHtml(
+          fmtMoney(weekTotal)
+        )}</div></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">This month</div><div style="font-weight:900;">${escapeHtml(
+          fmtMoney(monthTotal)
+        )}</div></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">All time</div><div style="font-weight:900;">${escapeHtml(
+          fmtMoney(allTimeTotal)
+        )}</div></div>
 
         <div style="font-size:12px; opacity:.75;">
           Earnings are posted after clock-out (tracked shifts) or after shift end (no-tracking shifts).
@@ -402,11 +362,8 @@ async function renderLedgerEarnings({ userId }) {
 }
 
 async function sumLedger({ userId, from, to }) {
-  let q = supabase
-    .from("earnings")
-    .select("amount, earned_at")
-    .eq("employee_user_id", userId)
-    .limit(1000);
+  let q = supabase.from("earnings").select("amount, earned_at").eq("employee_user_id", userId).limit(1000);
+
 
   if (from) q = q.gte("earned_at", from.toISOString());
   if (to) q = q.lte("earned_at", to.toISOString());
@@ -441,22 +398,19 @@ function renderEarningRow(r) {
       : `<span class="wl-badge wl-badge--active">Clocked</span>`;
 
   return `
-    <div class="wl-card wl-panel" style="padding:12px;">
+    <div class="wl-card wl-panel employee-earning-card">
       <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
         <div style="min-width:0;">
-          <div style="font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${escapeHtml(title)}
-          </div>
-          <div style="opacity:.85; font-size:13px; margin-top:6px;">
-            ${when ? `<b>${escapeHtml(when)}</b> • ` : ""}${escapeHtml(time)}
-          </div>
+         <div class="employee-shift-card__title">${escapeHtml(title)}</div>
+          <div class="employee-shift-card__meta">${when ? `<b>${escapeHtml(when)}</b> • ` : ""}${escapeHtml(time)}</div>
+          
           <div style="opacity:.8; font-size:12px; margin-top:6px;">
             Paid minutes: <b>${escapeHtml(String(r.minutes_paid ?? 0))}</b> • Earned: ${escapeHtml(
               r.earned_at ? new Date(r.earned_at).toLocaleString() : ""
             )}
           </div>
         </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+        <div class="employee-shift-card__actions">
           ${badge}
           <div style="font-weight:900;">${escapeHtml(fmtMoney(Number(r.amount || 0)))}</div>
         </div>
@@ -465,9 +419,6 @@ function renderEarningRow(r) {
   `;
 }
 
-/* --------------------------
-   Shared helpers
---------------------------- */
 
 function startOfDay(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -489,8 +440,8 @@ function isoDate(d) {
 
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = x.getDay(); // 0 Sun
-  const diff = (day + 6) % 7; // Monday
+  const day = x.getDay();
+  const diff = (day + 6) % 7;
   x.setDate(x.getDate() - diff);
   x.setHours(0, 0, 0, 0);
   return x;
