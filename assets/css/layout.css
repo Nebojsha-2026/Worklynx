@@ -45,7 +45,7 @@ main.wl-page, main.wl-auth{
   gap:10px;
   min-width: 180px;
 }
-.wl-brand img{ width:45px; height:45px; }
+.wl-brand img{ width:96px; height:96px; }
 .wl-brand strong{ font-size: 16px; }
 
 .wl-org{
