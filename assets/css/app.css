@@ -220,3 +220,130 @@ input:focus, select:focus{
   width: min(var(--content-max), calc(100vw - (var(--content-pad) * 2)));
   margin: 0 auto;
 }
+/* Employee dashboard refresh */
+.employee-dashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.employee-dashboard__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.employee-dashboard__title {
+  margin: 0;
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  line-height: 1.15;
+}
+
+.employee-dashboard__subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.employee-dashboard__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.employee-metric-card__label,
+.employee-metric-card__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.employee-metric-card__value {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.employee-metric-card__hint {
+  margin-top: 8px;
+}
+
+.employee-dashboard__today-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.employee-dashboard__today-body {
+  margin-top: 12px;
+}
+
+.employee-dashboard__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.employee-section-title {
+  margin: 0;
+  font-weight: 900;
+  font-size: 18px;
+}
+
+.employee-section-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.employee-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.employee-shift-card {
+  display: block;
+}
+
+.employee-shift-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.employee-shift-card__title {
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-shift-card__meta {
+  opacity: .85;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.employee-shift-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.employee-earning-card {
+  padding: 12px;
+}
+
+@media (max-width: 980px) {
+  .employee-dashboard__grid {
+    grid-template-columns: 1fr;
+  }
+}
