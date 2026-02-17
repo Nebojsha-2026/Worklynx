@@ -140,12 +140,14 @@ function render() {
     groupedByDate[date].push(shift);
   });
 
-  // Sort dates (today first, then chronologically)
+  // Sort dates (today first, then reverse-chronological for past days)
   const today = new Date().toISOString().split("T")[0];
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
     if (a === today) return -1;
     if (b === today) return 1;
-    return a.localeCompare(b);
+    if (a === "No date") return 1;
+    if (b === "No date") return -1;
+    return b.localeCompare(a);
   });
 
   // Render grouped by day
