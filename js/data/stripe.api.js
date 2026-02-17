@@ -41,14 +41,14 @@ export async function createCheckoutSession({ tier, orgId, orgName }) {
   const cancelUrl = `${origin}/pricing.html?canceled=true`;
 
   const { error } = await stripe.redirectToCheckout({
-    lineItems: [{ price: priceId, quantity: 1 }],
-    mode: "subscription",
-    successUrl,
-    cancelUrl,
-    clientReferenceId: orgId,
-    customerEmail: session.user.email,
-    metadata: { orgId, orgName, userId: session.user.id },
-  });
+  lineItems: [{ price: priceId, quantity: 1 }],
+  mode: "subscription",
+  successUrl,
+  cancelUrl,
+  clientReferenceId: orgId,
+  customerEmail: session.user.email,
+  // metadata removed - not supported in redirectToCheckout
+});
 
   if (error) throw error;
 }
