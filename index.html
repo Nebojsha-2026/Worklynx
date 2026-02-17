@@ -3,21 +3,597 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="assets/css/app.css" />
+  <meta name="description" content="WorkLynx - Professional timesheet and shift management for businesses. Streamline scheduling, track time, and manage your workforce efficiently." />
   <link rel="icon" href="assets/images/favicon.ico" />
-  <title>WorkLynx</title>
+  <title>WorkLynx - Professional Timesheet & Shift Management</title>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #2c3e50;
+      background: #ffffff;
+    }
+
+    /* Navigation */
+    .navbar {
+      background: #ffffff;
+      padding: 20px 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #2c3e50;
+      text-decoration: none;
+    }
+
+    .logo-nav img { width: 40px; height: 40px; }
+
+    .nav-links {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: #5a6c7d;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover { color: #3b82f6; }
+
+    .nav-links .btn-nav {
+      background: #3b82f6;
+      color: white;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .nav-links .btn-nav:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 100px 20px 120px;
+      background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+    }
+
+    .hero-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 800;
+      margin-bottom: 24px;
+      color: #1e293b;
+      line-height: 1.1;
+    }
+
+    .hero-highlight { color: #3b82f6; }
+
+    .hero p {
+      font-size: clamp(1.1rem, 2vw, 1.3rem);
+      margin-bottom: 40px;
+      color: #64748b;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #3b82f6;
+      border: 2px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+    }
+
+    /* Stats */
+    .stats {
+      background: white;
+      padding: 60px 20px;
+      border-top: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .stats-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 40px;
+      text-align: center;
+    }
+
+    .stat-item h3 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #3b82f6;
+      margin-bottom: 8px;
+    }
+
+    .stat-item p {
+      color: #64748b;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    /* Features */
+    .features {
+      padding: 100px 20px;
+      background: #ffffff;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: clamp(2rem, 4vw, 2.5rem);
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: #1e293b;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      font-size: 1.1rem;
+      color: #64748b;
+      margin-bottom: 60px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 30px;
+    }
+
+    .feature-card {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 8px 30px rgba(59, 130, 246, 0.12);
+      transform: translateY(-4px);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      background: #eff6ff;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #1e293b;
+    }
+
+    .feature-card p {
+      color: #64748b;
+      line-height: 1.7;
+      font-size: 0.95rem;
+    }
+
+    /* Pricing */
+    .pricing-preview {
+      padding: 100px 20px;
+      background: #f8fafc;
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 60px auto 0;
+    }
+
+    .pricing-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 40px 32px;
+      text-align: center;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .pricing-card:hover {
+      border-color: #3b82f6;
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.15);
+    }
+
+    .pricing-card.featured {
+      border-color: #3b82f6;
+      box-shadow: 0 8px 30px rgba(59, 130, 246, 0.12);
+      transform: scale(1.02);
+    }
+
+    .pricing-card.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #3b82f6;
+      color: white;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .pricing-card h3 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1e293b;
+    }
+
+    .price {
+      font-size: 3rem;
+      font-weight: 800;
+      color: #1e293b;
+      margin: 20px 0;
+    }
+
+    .price small {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #64748b;
+    }
+
+    .pricing-features {
+      list-style: none;
+      margin: 24px 0 32px;
+      text-align: left;
+    }
+
+    .pricing-features li {
+      padding: 10px 0;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.95rem;
+    }
+
+    .pricing-features li::before {
+      content: '✓';
+      color: #3b82f6;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .pricing-card .btn { width: 100%; }
+
+    /* CTA */
+    .cta-section {
+      padding: 100px 20px;
+      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      text-align: center;
+      color: white;
+    }
+
+    .cta-section h2 {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .cta-section p {
+      font-size: 1.2rem;
+      margin-bottom: 40px;
+    }
+
+    .cta-section .btn-primary {
+      background: white;
+      color: #3b82f6;
+    }
+
+    .cta-section .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .cta-section .btn-secondary:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    /* Footer */
+    .footer {
+      background: #1e293b;
+      color: white;
+      padding: 60px 20px 30px;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto 40px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 40px;
+    }
+
+    .footer-section h4 {
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      font-weight: 700;
+    }
+
+    .footer-section ul { list-style: none; }
+
+    .footer-section li { margin-bottom: 12px; }
+
+    .footer-section a {
+      color: #94a3b8;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    .footer-section a:hover { color: white; }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 30px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      color: #94a3b8;
+    }
+
+    @media (max-width: 768px) {
+      .nav-links a:not(.btn-nav) { display: none; }
+      .cta-buttons { flex-direction: column; }
+      .btn { width: 100%; }
+      .pricing-card.featured { transform: scale(1); }
+    }
+  </style>
 </head>
 <body>
-  <main class="wl-auth">
-    <h1>WorkLynx</h1>
-    <p>Modern timesheets & shift management for teams.</p>
-
-    <div class="wl-actions">
-      <a class="wl-btn" href="login.html">Log in</a>
-      <a class="wl-btn wl-btn--ghost" href="register.html">Create account</a>
-      <a class="wl-btn wl-btn--ghost" href="pricing.html">View pricing</a>
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="logo-nav">
+        <img src="assets/images/logo-mark.png" alt="WorkLynx" onerror="this.style.display='none'" />
+        <span>WorkLynx</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="login.html">Login</a>
+        <a href="register.html" class="btn-nav">Get Started</a>
+      </div>
     </div>
-  </main>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Professional Timesheet &<br/><span class="hero-highlight">Shift Management</span></h1>
+      <p>Streamline your workforce management with WorkLynx. Track time accurately, schedule shifts efficiently, and manage your team with confidence.</p>
+      <div class="cta-buttons">
+        <a href="register.html" class="btn btn-primary">Start Free Trial</a>
+        <a href="pricing.html" class="btn btn-secondary">View Pricing</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stats-container">
+      <div class="stat-item"><h3>99.9%</h3><p>Uptime Guarantee</p></div>
+      <div class="stat-item"><h3>24/7</h3><p>Customer Support</p></div>
+      <div class="stat-item"><h3>14-Day</h3><p>Free Trial</p></div>
+      <div class="stat-item"><h3>$0</h3><p>Setup Fees</p></div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <h2 class="section-title">Built for Business</h2>
+      <p class="section-subtitle">Everything you need to manage your workforce effectively</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📅</div>
+          <h3>Shift Scheduling</h3>
+          <p>Create and manage shifts with ease. Assign employees, set recurring schedules, and handle changes in real-time.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⏱️</div>
+          <h3>Time Tracking</h3>
+          <p>Precise clock in/out tracking with automatic calculations. Generate accurate timesheets and reduce payroll errors.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Team Management</h3>
+          <p>Organize your workforce with role-based permissions. Manage owners, managers, and employees efficiently.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Detailed Reports</h3>
+          <p>Access comprehensive reports on labor costs, attendance, and productivity. Make informed business decisions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>Payroll Integration</h3>
+          <p>Export timesheets in payroll-ready formats. Streamline your payroll process and save hours of work.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Enterprise Security</h3>
+          <p>Bank-level encryption and data protection. Your business data is safe and secure with us.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing-preview">
+    <div class="container">
+      <h2 class="section-title">Transparent Pricing</h2>
+      <p class="section-subtitle">Choose the plan that fits your business. Cancel anytime.</p>
+      <div class="pricing-cards">
+        <div class="pricing-card">
+          <h3>Starter</h3>
+          <div class="price">$20<small>/month</small></div>
+          <ul class="pricing-features">
+            <li>Up to 20 employees</li>
+            <li>2 Managers</li>
+            <li>Shift scheduling</li>
+            <li>Time tracking</li>
+            <li>Email support</li>
+          </ul>
+          <a href="pricing.html" class="btn btn-primary">Get Started</a>
+        </div>
+        <div class="pricing-card featured">
+          <h3>Professional</h3>
+          <div class="price">$40<small>/month</small></div>
+          <ul class="pricing-features">
+            <li>Up to 40 employees</li>
+            <li>4 Managers</li>
+            <li>Advanced reporting</li>
+            <li>Mobile app</li>
+            <li>Priority support</li>
+          </ul>
+          <a href="pricing.html" class="btn btn-primary">Get Started</a>
+        </div>
+        <div class="pricing-card">
+          <h3>Business</h3>
+          <div class="price">$80<small>/month</small></div>
+          <ul class="pricing-features">
+            <li>Up to 80 employees</li>
+            <li>8 Managers</li>
+            <li>Custom branding</li>
+            <li>API access</li>
+            <li>Dedicated support</li>
+          </ul>
+          <a href="pricing.html" class="btn btn-primary">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-section">
+    <div class="container">
+      <h2>Ready to Streamline Your Operations?</h2>
+      <p>Join businesses worldwide using WorkLynx</p>
+      <div class="cta-buttons">
+        <a href="register.html" class="btn btn-primary">Start Free Trial</a>
+        <a href="login.html" class="btn btn-secondary">Sign In</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-section">
+        <h4>WorkLynx</h4>
+        <p style="color:#94a3b8">Professional timesheet and shift management for modern businesses.</p>
+      </div>
+      <div class="footer-section">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="register.html">Sign Up</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#about">About</a></li>
+          <li><a href="#contact">Contact</a></li>
+          <li><a href="#support">Support</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#terms">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 WorkLynx. Built by Nebojsha. All rights reserved.</p>
+    </div>
+  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="js/pages/index.page.js"></script>
