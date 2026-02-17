@@ -57,7 +57,7 @@ main.wl-page, main.wl-auth{
   text-align:center;
   min-width: 0; /* prevents overflow pushing actions off */
 }
-.wl-org img{ width:32px; height:32px; border-radius:8px; }
+.wl-org img{ width:55px; height:55px; border-radius:8px; }
 
 .wl-actions{
   display:flex;
