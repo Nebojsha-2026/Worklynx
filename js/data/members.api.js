@@ -36,3 +36,47 @@ export async function deactivateOrgMember({ organizationId, userId }) {
   });
   if (error) throw error;
 }
+
+export function normalizePaymentFrequency(value) {
+  const raw = String(value || "FORTNIGHTLY").trim().toUpperCase();
+  if (["WEEKLY", "FORTNIGHTLY", "MONTHLY"].includes(raw)) return raw;
+  return "FORTNIGHTLY";
+}
+
+export async function getOrgMember({ organizationId, userId }) {
+  const supabase = getSupabase();
+  if (!organizationId) throw new Error("Missing organizationId.");
+  if (!userId) throw new Error("Missing userId.");
+
+  const { data, error } = await supabase
+    .from("org_members")
+    .select("organization_id, user_id, role, payment_frequency")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+export async function updateOrgMemberPaymentFrequency({
+  organizationId,
+  userId,
+  paymentFrequency,
+}) {
+  const supabase = getSupabase();
+  const normalized = normalizePaymentFrequency(paymentFrequency);
+
+  const { data, error } = await supabase
+    .from("org_members")
+    .update({ payment_frequency: normalized })
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .select("organization_id, user_id, payment_frequency")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
