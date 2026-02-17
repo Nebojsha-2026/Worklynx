@@ -1,50 +1,42 @@
-// js/data/stripe.api.js - FIXED VERSION
+// js/data/stripe.api.js - USING PAYMENT LINKS (MODERN APPROACH)
 import { getSupabase } from "../core/supabaseClient.js";
 import { getSession } from "../core/session.js";
 
+// ✅ YOUR STRIPE PAYMENT LINKS
+// REPLACE these with your actual links from Stripe Dashboard
 const STRIPE_CONFIG = {
-  publishableKey: "pk_test_51T0emrJzqXVwu1nzS0q2wPJK41arrfy6fwmj9lsqa5OnQNpwYMXOATJCNjhzWRICHQsAeUrnb5CxpMkvLq9C9cTE000OJFltVw",
-  prices: {
-    tier_1: "price_1T1dKUJzqXVwu1nzXKbwW7wF",
-    tier_2: "price_1T1dLRJzqXVwu1nzAjRYN8L2",
-    tier_3: "price_1T1dM4JzqXVwu1nzrABlAZ2R",
+  paymentLinks: {
+    tier_1: "https://buy.stripe.com/test_dRmeVe4u3gHL65Pg796Zy00", // $20/month
+    tier_2: "https://buy.stripe.com/test_4gMcN6d0zdvz79T9IL6Zy01", // $40/month
+    tier_3: "https://buy.stripe.com/test_9B63cw6Cb4Z3dyhbQT6Zy02", // $80/month
   }
 };
-
-async function loadStripe() {
-  if (window.Stripe) return window.Stripe(STRIPE_CONFIG.publishableKey);
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://js.stripe.com/v3/";
-    script.onload = () => resolve(window.Stripe(STRIPE_CONFIG.publishableKey));
-    script.onerror = () => reject(new Error("Failed to load Stripe.js"));
-    document.head.appendChild(script);
-  });
-}
 
 export async function createCheckoutSession({ tier, orgId, orgName }) {
   const session = await getSession();
   if (!session?.user) throw new Error("Not authenticated");
 
-  const priceId = STRIPE_CONFIG.prices[tier];
-  if (!priceId) throw new Error(`Invalid tier: ${tier}`);
-
-  const stripe = await loadStripe();
-  const origin = window.location.origin;
+  const paymentLink = STRIPE_CONFIG.paymentLinks[tier];
   
-  const successUrl = `${origin}/app/bo/dashboard.html?session_id={CHECKOUT_SESSION_ID}&org_id=${orgId}`;
+  if (!paymentLink || paymentLink.includes("REPLACE")) {
+    throw new Error(`Payment link not configured for ${tier}. Please create Payment Links in Stripe Dashboard.`);
+  }
+
+  // Store org info for after payment
+  try {
+    localStorage.setItem("pending_payment", JSON.stringify({ orgId, orgName, tier, timestamp: Date.now() }));
+  } catch (e) {
+    console.warn("Could not store payment info:", e);
+  }
+
+  const origin = window.location.origin;
+  const successUrl = `${origin}/app/bo/dashboard.html?payment=success&org_id=${orgId}`;
   const cancelUrl = `${origin}/pricing.html?canceled=true`;
 
-  const { error } = await stripe.redirectToCheckout({
-    lineItems: [{ price: priceId, quantity: 1 }],
-    mode: "subscription",
-    successUrl,
-    cancelUrl,
-    clientReferenceId: orgId,
-    customerEmail: session.user.email,
-  });
+  const fullLink = `${paymentLink}?success_url=${encodeURIComponent(successUrl)}&cancel_url=${encodeURIComponent(cancelUrl)}&client_reference_id=${orgId}&prefilled_email=${encodeURIComponent(session.user.email)}`;
 
-  if (error) throw error;
+  console.log("🚀 Redirecting to Stripe Payment Link...");
+  window.location.href = fullLink;
 }
 
 export async function getOrgSubscription({ orgId }) {
