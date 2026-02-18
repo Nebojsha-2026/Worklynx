@@ -50,7 +50,7 @@ content.innerHTML = `
 
     <div id="inviteResult" style="margin-top:12px;"></div>
   </section>
-  
+
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
       <h2 style="margin:0;">Employees</h2>
@@ -98,6 +98,9 @@ document.querySelector("#inviteForm").addEventListener("submit", async (e) => {
   }
 });
 
+let payFrequencySupported = true;
+let paymentFrequencySupportMessage = "";
+
 await refreshEmployees();
 
 async function refreshEmployees() {
@@ -116,13 +119,36 @@ async function refreshEmployees() {
     }
 
     const ids = members.map((m) => m.user_id).filter(Boolean);
-    const freqByUserId = await loadPaymentFrequencies(ids);
+
+    let freqByUserId = new Map();
+    payFrequencySupported = true;
+    paymentFrequencySupportMessage = "";
+
+    try {
+      freqByUserId = await loadPaymentFrequencies(ids);
+    } catch (err) {
+      if (isMissingPaymentFrequencyColumnError(err)) {
+        payFrequencySupported = false;
+        paymentFrequencySupportMessage = "Payment frequency column is missing in database. Please apply migration for org_members.payment_frequency.";
+      } else {
+        throw err;
+      }
+    }
 
     box.innerHTML = `
+      ${
+        !payFrequencySupported
+          ? `<div class="wl-alert wl-alert--error" style="margin-bottom:10px;">${escapeHtml(paymentFrequencySupportMessage)}</div>`
+          : ""
+      }
       <div style="display:grid; gap:10px;">
         ${members.map((m) => renderEmployeeRow(m, freqByUserId.get(m.user_id))).join("")}
       </div>
     `;
+
+    box.querySelectorAll("[data-pay-select], [data-pay-save]").forEach((el) => {
+      if (!payFrequencySupported) el.setAttribute("disabled", "disabled");
+    });
 
     box.querySelectorAll("[data-pay-save]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -133,6 +159,11 @@ async function refreshEmployees() {
         if (!userId || !select) return;
 
         const next = normalizePaymentFrequency(select.value);
+
+        if (!payFrequencySupported) {
+          msg.innerHTML = `<span style="color:#dc2626;">Migration required</span>`;
+          return;
+        }
 
         try {
           btn.disabled = true;
@@ -166,8 +197,9 @@ function renderEmployeeRow(member, paymentFrequency) {
     <div data-user-row data-user-id="${escapeHtml(member.user_id)}" class="wl-card" style="padding:12px;">
       <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
         <div>
-          <div style="font-weight:800;">Employee</div>
-          <div style="font-size:12px; color:#64748b; margin-top:4px;">User ID: <code>${escapeHtml(member.user_id)}</code></div>
+          <div style="font-weight:800;">${escapeHtml(getMemberDisplayName(member))}</div>
+          <div style="font-size:12px; color:#64748b; margin-top:4px;">Email: ${escapeHtml(member.email || "Not available")}</div>
+          <div style="font-size:12px; color:#94a3b8; margin-top:2px;">User ID: <code>${escapeHtml(member.user_id)}</code></div>
         </div>
 
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -199,6 +231,20 @@ async function loadPaymentFrequencies(userIds) {
   if (error) throw error;
 
   return new Map((data || []).map((r) => [r.user_id, r.payment_frequency]));
+}
+
+
+function getMemberDisplayName(member) {
+  const fullName = String(member?.full_name || "").trim();
+  if (fullName) return fullName;
+  const email = String(member?.email || "").trim();
+  if (email) return email;
+  return "Employee";
+}
+
+function isMissingPaymentFrequencyColumnError(err) {
+  const text = String(err?.message || err?.details || err?.hint || "").toLowerCase();
+  return text.includes("payment_frequency") && text.includes("column");
 }
 
 function escapeHtml(str) {
