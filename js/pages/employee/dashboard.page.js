@@ -8,6 +8,7 @@ import { getSupabase } from "../../core/supabaseClient.js";
 import { path } from "../../core/config.js";
 import { getSession } from "../../core/session.js";
 import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
+import { getOrgMember, normalizePaymentFrequency } from "../../data/members.api.js";
 
 await requireRole(["EMPLOYEE"]);
 
@@ -35,20 +36,18 @@ const content = main.querySelector("#wlContent");
 content.innerHTML = `
   <div class="wl-page employee-dashboard">
     <section class="employee-dashboard__hero wl-card wl-panel">
-    
       <div>
         <h1 class="employee-dashboard__title">Dashboard</h1>
         <p class="employee-dashboard__subtitle">Your shifts, time tracking, and earnings in one place.</p>
       </div>
-      
-       <a class="wl-btn wl-btn--primary" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
+      <a class="wl-btn wl-btn--primary" href="${path("/app/employee/my-shifts.html")}">View all shifts</a>
     </section>
 
     <section class="employee-dashboard__metrics">
       <article class="employee-metric-card wl-card wl-panel">
-        <p class="employee-metric-card__label">This week</p>
+        <p class="employee-metric-card__label" id="periodLabel">Current period</p>
         <div id="cardWeek" class="employee-metric-card__value">—</div>
-        <p class="employee-metric-card__hint">Mon → today</p>
+        <p class="employee-metric-card__hint" id="periodHint">—</p>
       </article>
     </section>
 
@@ -94,6 +93,8 @@ const upcomingListEl = document.querySelector("#upcomingList");
 const earningsBoxEl = document.querySelector("#earningsBox");
 const recentEarningsEl = document.querySelector("#recentEarnings");
 const cardWeekEl = document.querySelector("#cardWeek");
+const periodLabelEl = document.querySelector("#periodLabel");
+const periodHintEl = document.querySelector("#periodHint");
 
 try {
   const session = await getSession();
@@ -102,11 +103,13 @@ try {
 
   const upcoming = await loadUpcomingAssignedShifts({ days: 14 });
   const active = await getActiveClockedInShift({ userId });
+  const member = await getOrgMember({ organizationId: org.id, userId });
+  const paymentFrequency = normalizePaymentFrequency(member?.payment_frequency);
 
   renderToday({ upcoming, active });
   renderUpcoming(upcoming);
 
-  await renderLedgerEarnings({ userId });
+  await renderLedgerEarnings({ userId, paymentFrequency });
 } catch (err) {
   console.error(err);
   todaySubEl.textContent = "Could not load dashboard.";
@@ -117,9 +120,8 @@ try {
   recentEarningsEl.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load recent earnings.</div>`;
 }
 
-
 async function loadUpcomingAssignedShifts({ days }) {
- const assigns = await listMyShiftAssignments();
+  const assigns = await listMyShiftAssignments();
   const ids = (assigns || []).map((a) => a.shift_id).filter(Boolean);
   if (!ids.length) return [];
 
@@ -181,7 +183,6 @@ async function getActiveClockedInShift({ userId }) {
   }
 }
 
-
 function renderToday({ upcoming, active }) {
   const now = new Date();
   const today = isoDate(now);
@@ -220,27 +221,7 @@ function renderToday({ upcoming, active }) {
       <div class="wl-alert" style="opacity:.95;">
         You don’t have any assigned shifts coming up.
         <div style="font-size:13px; opacity:.85; margin-top:6px;">
-          If you believe this is wrong, ask your manager to assign you.
-        </div>
-      </div>
-    `;
-    return;
-  }
-
-  const when = formatWhenLabel(nextShift.shift_date);
-  const loc = nextShift.location ? ` • 📍 ${nextShift.location}` : "";
-  const needsTracking = nextShift.track_time === false ? false : true;
-
-  todaySubEl.textContent = todayShift ? "Your shift today" : "Your next shift";
-  todayBodyEl.innerHTML = `
-    <div class="wl-alert">
-      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-        <div style="min-width:0;">
-          <div style="font-weight:900;">${escapeHtml(nextShift.title || "Upcoming shift")}</div>
-          <div style="font-size:13px; opacity:.85; margin-top:6px;">
-            <b>${escapeHtml(when)}</b> • ${escapeHtml(nextShift.start_at || "")} → ${escapeHtml(nextShift.end_at || "")}
-            ${escapeHtml(loc)}
-          </div>
+@@ -270,270 +245,277 @@ function renderToday({ upcoming, active }) {
           ${
             needsTracking
               ? ""
@@ -315,29 +296,24 @@ function renderShiftCard(s) {
   `;
 }
 
-
-async function renderLedgerEarnings({ userId }) {
+async function renderLedgerEarnings({ userId, paymentFrequency }) {
   const now = new Date();
-  const weekStart = startOfWeek(now);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const period = getCurrentPayPeriod({ now, paymentFrequency });
 
-  const [weekTotal, monthTotal, allTimeTotal] = await Promise.all([
-    sumLedger({ userId, from: weekStart, to: now }),
-    sumLedger({ userId, from: monthStart, to: now }),
+  const [periodTotal, allTimeTotal] = await Promise.all([
+    sumLedger({ userId, from: period.from, to: now }),
     sumLedger({ userId, from: null, to: null }),
   ]);
 
-  cardWeekEl.textContent = fmtMoney(weekTotal);
+  periodLabelEl.textContent = period.metricLabel;
+  periodHintEl.textContent = period.rangeLabel;
+  cardWeekEl.textContent = fmtMoney(periodTotal);
 
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
-    
       <div style="display:grid; gap:10px;">
-       <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">This week</div><div style="font-weight:900;">${escapeHtml(
-          fmtMoney(weekTotal)
-        )}</div></div>
-        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">This month</div><div style="font-weight:900;">${escapeHtml(
-          fmtMoney(monthTotal)
+        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">${escapeHtml(period.metricLabel)}</div><div style="font-weight:900;">${escapeHtml(
+          fmtMoney(periodTotal)
         )}</div></div>
         <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">All time</div><div style="font-weight:900;">${escapeHtml(
           fmtMoney(allTimeTotal)
@@ -363,7 +339,6 @@ async function renderLedgerEarnings({ userId }) {
 
 async function sumLedger({ userId, from, to }) {
   let q = supabase.from("earnings").select("amount, earned_at").eq("employee_user_id", userId).limit(1000);
-
 
   if (from) q = q.gte("earned_at", from.toISOString());
   if (to) q = q.lte("earned_at", to.toISOString());
@@ -401,9 +376,8 @@ function renderEarningRow(r) {
     <div class="wl-card wl-panel employee-earning-card">
       <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
         <div style="min-width:0;">
-         <div class="employee-shift-card__title">${escapeHtml(title)}</div>
+          <div class="employee-shift-card__title">${escapeHtml(title)}</div>
           <div class="employee-shift-card__meta">${when ? `<b>${escapeHtml(when)}</b> • ` : ""}${escapeHtml(time)}</div>
-          
           <div style="opacity:.8; font-size:12px; margin-top:6px;">
             Paid minutes: <b>${escapeHtml(String(r.minutes_paid ?? 0))}</b> • Earned: ${escapeHtml(
               r.earned_at ? new Date(r.earned_at).toLocaleString() : ""
@@ -418,7 +392,6 @@ function renderEarningRow(r) {
     </div>
   `;
 }
-
 
 function startOfDay(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -473,6 +446,44 @@ function formatWhenLabel(yyyyMmDd) {
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Tomorrow";
   return String(yyyyMmDd);
+}
+
+
+function getCurrentPayPeriod({ now, paymentFrequency }) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const frequency = normalizePaymentFrequency(paymentFrequency);
+
+  if (frequency === "MONTHLY") {
+    const from = new Date(d.getFullYear(), d.getMonth(), 1);
+    return {
+      from,
+      metricLabel: "Current monthly period",
+      rangeLabel: `${isoDate(from)} → ${isoDate(d)}`,
+    };
+  }
+
+  if (frequency === "WEEKLY") {
+    const from = startOfWeek(d);
+    return {
+      from,
+      metricLabel: "Current weekly period",
+      rangeLabel: `${isoDate(from)} → ${isoDate(d)}`,
+    };
+  }
+
+  const weekStart = startOfWeek(d);
+  const anchor = new Date(2024, 0, 1);
+  anchor.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.floor((weekStart.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
+  const fortnightIndex = Math.floor(diffDays / 14);
+  const from = new Date(anchor.getTime() + fortnightIndex * 14 * 24 * 60 * 60 * 1000);
+
+  return {
+    from,
+    metricLabel: "Current fortnightly period",
+    rangeLabel: `${isoDate(from)} → ${isoDate(d)}`,
+  };
 }
 
 function fmtMoney(n) {
