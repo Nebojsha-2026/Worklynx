@@ -61,6 +61,9 @@ main.querySelector("#wlContent").innerHTML = `
   </section>
 `;
 
+let payFrequencySupported = true;
+let paymentFrequencySupportMessage = "";
+
 async function refreshEmployees() {
   const box = document.querySelector("#employeesList");
   box.innerHTML = "Loading...";
@@ -104,13 +107,34 @@ async function refreshEmployees() {
       </div>
     `;
 
-     const freqs = await loadPaymentFrequencies(rows.map((r) => r.user_id));
+    let freqs = new Map();
+    payFrequencySupported = true;
+    paymentFrequencySupportMessage = "";
+
+    try {
+      freqs = await loadPaymentFrequencies(rows.map((r) => r.user_id));
+    } catch (err) {
+      if (isMissingPaymentFrequencyColumnError(err)) {
+        payFrequencySupported = false;
+        paymentFrequencySupportMessage = "Payment frequency column is missing in database. Please apply migration for org_members.payment_frequency.";
+      } else {
+        throw err;
+      }
+    }
+
+    if (!payFrequencySupported) {
+      box.insertAdjacentHTML("afterbegin", `<div class="wl-alert wl-alert--error" style="margin-bottom:10px;">${escapeHtml(paymentFrequencySupportMessage)}</div>`);
+    }
 
     box.querySelectorAll("[data-user-row]").forEach((row) => {
       const userId = row.getAttribute("data-user-id");
       const select = row.querySelector("select[data-pay-select]");
       if (!userId || !select) return;
       select.value = normalizePaymentFrequency(freqs.get(userId));
+    });
+
+    box.querySelectorAll("[data-pay-select], [data-save-pay]").forEach((el) => {
+      if (!payFrequencySupported) el.setAttribute("disabled", "disabled");
     });
 
     box.querySelectorAll("[data-save-pay]").forEach((btn) => {
@@ -120,6 +144,11 @@ async function refreshEmployees() {
         const select = row?.querySelector("select[data-pay-select]");
         const msg = row?.querySelector("[data-pay-msg]");
         if (!userId || !select || !msg) return;
+
+        if (!payFrequencySupported) {
+          msg.innerHTML = `<span style="color:#dc2626;">Migration required</span>`;
+          return;
+        }
 
         try {
           btn.disabled = true;
@@ -178,7 +207,7 @@ document.querySelector("#inviteEmployeeForm").addEventListener("submit", async (
     document.querySelector("#inviteEmployeeResult").innerHTML = `
       <div class="wl-card" style="padding:12px;">
         <div><strong>Employee invite created</strong></div>
-         <div>Email: <code>${escapeHtml(res.invited_email)}</code></div>
+        <div>Email: <code>${escapeHtml(res.invited_email)}</code></div>
         <div>Role: <code>${escapeHtml(res.invited_role)}</code></div>
         <div style="margin-top:8px;">
           Invite link:<br/>
@@ -205,6 +234,11 @@ async function loadPaymentFrequencies(userIds) {
 
   if (error) throw error;
   return new Map((data || []).map((r) => [r.user_id, r.payment_frequency]));
+}
+
+function isMissingPaymentFrequencyColumnError(err) {
+  const text = String(err?.message || err?.details || err?.hint || "").toLowerCase();
+  return text.includes("payment_frequency") && text.includes("column");
 }
 
 function escapeHtml(str) {
