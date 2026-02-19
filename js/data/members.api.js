@@ -64,25 +64,23 @@ export async function updateOrgMemberPaymentFrequency({
   organizationId,
   userId,
   paymentFrequency,
-  role = "EMPLOYEE",
 }) {
   const supabase = getSupabase();
   const normalized = normalizePaymentFrequency(paymentFrequency);
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("org_members")
     .update({ payment_frequency: normalized })
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
-    .eq("role", role)
-    .eq("is_active", true)
-    .select("organization_id, user_id, role, payment_frequency");
+    .eq("is_active", true);
 
   if (error) throw error;
 
-  const rows = Array.isArray(data) ? data : [];
-  if (!rows.length) {
-    throw new Error("No active employee membership found to update payment frequency.");
-  }
-  return rows[0];
+  // Avoid assuming read-back row visibility under RLS after UPDATE.
+  return {
+    organization_id: organizationId,
+    user_id: userId,
+    payment_frequency: normalized,
+  };
 }
