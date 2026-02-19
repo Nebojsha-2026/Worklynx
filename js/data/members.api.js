@@ -30,7 +30,7 @@ export async function listOrgMembers({ organizationId, roles = null }) {
 
 export async function deactivateOrgMember({ organizationId, userId }) {
   const supabase = getSupabase();
-  const { error } = await supabase.rpc("deactivate_org_member", {
+  const { error, count } = await supabase.rpc("deactivate_org_member", {
     p_org_id: organizationId,
     p_user_id: userId,
   });
@@ -68,14 +68,20 @@ export async function updateOrgMemberPaymentFrequency({
   const supabase = getSupabase();
   const normalized = normalizePaymentFrequency(paymentFrequency);
 
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from("org_members")
-    .update({ payment_frequency: normalized })
+    .update({ payment_frequency: normalized }, { count: "exact" })
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .eq("is_active", true);
 
   if (error) throw error;
+
+  if (count === 0) {
+    throw new Error(
+      "Payment frequency was not updated. You may not have permission to update this employee membership."
+    );
+  }
 
   // Avoid assuming read-back row visibility under RLS after UPDATE.
   return {
