@@ -5,7 +5,7 @@ import { getSession } from "../core/session.js";
 export async function getMyMemberships() {
   const supabase = getSupabase();
   const session = await getSession();
-  const uid = session?.user?.id;
+ const uid = session?.user?.id;
   if (!uid) return [];
 
   const { data, error } = await supabase
