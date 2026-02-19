@@ -219,22 +219,38 @@ function renderToday({ upcoming, active }) {
     todaySubEl.textContent = "No upcoming shifts.";
     todayBodyEl.innerHTML = `
       <div class="wl-alert" style="opacity:.95;">
-        You don’t have any assigned shifts coming up.
+        You don't have any assigned shifts coming up.
         <div style="font-size:13px; opacity:.85; margin-top:6px;">
-@@ -270,270 +245,277 @@ function renderToday({ upcoming, active }) {
-          ${
-            needsTracking
-              ? ""
-              : `<div style="font-size:13px; opacity:.85; margin-top:6px;">
-                   ✅ No tracking required for this shift (you can still clock in if you want).
-                 </div>`
-          }
-        </div>
-        <div style="display:flex; align-items:center; gap:10px;">
-          ${renderStatusBadge(String(nextShift.status || "PUBLISHED").toUpperCase())}
+          Contact your manager if you believe this is incorrect.
         </div>
       </div>
+    `;
+    return;
+  }
 
+  const needsTracking = nextShift.track_time !== false;
+  const isToday = String(nextShift.shift_date) === today;
+
+  todaySubEl.textContent = isToday ? "You have a shift today." : `Next shift: ${formatWhenLabel(nextShift.shift_date)}`;
+
+  todayBodyEl.innerHTML = `
+    <div class="wl-alert">
+      <div style="font-weight:900;">${escapeHtml(nextShift.title || "Shift")}</div>
+      <div style="font-size:13px; opacity:.85; margin-top:6px;">
+        <b>${escapeHtml(formatWhenLabel(nextShift.shift_date))}</b>
+        • ${escapeHtml(nextShift.start_at || "")} → ${escapeHtml(nextShift.end_at || "")}
+        ${nextShift.location ? ` • 📍 ${escapeHtml(nextShift.location)}` : ""}
+      </div>
+      ${
+        needsTracking
+          ? ""
+          : `<div style="font-size:13px; opacity:.85; margin-top:6px;">
+               ✅ No tracking required for this shift (you can still clock in if you want).
+             </div>`
+      }
+      <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+        ${renderStatusBadge(String(nextShift.status || "PUBLISHED").toUpperCase())}
+      </div>
       <div style="margin-top:10px;">
         <a class="wl-btn" href="${path(`/app/employee/shift.html?id=${encodeURIComponent(nextShift.id)}`)}">
           Open shift →
@@ -273,7 +289,7 @@ function renderShiftCard(s) {
   const isCancelled = status === "CANCELLED";
   const when = formatWhenLabel(s.shift_date);
   const href = path(`/app/employee/shift.html?id=${encodeURIComponent(s.id)}`);
-  const needsTracking = s.track_time === false ? false : true;
+  const needsTracking = s.track_time !== false;
 
   return `
     <a class="wl-card wl-panel employee-shift-card ${isCancelled ? "is-cancelled" : ""}" href="${href}">
@@ -312,13 +328,8 @@ async function renderLedgerEarnings({ userId, paymentFrequency }) {
   earningsBoxEl.innerHTML = `
     <div class="wl-alert">
       <div style="display:grid; gap:10px;">
-        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">${escapeHtml(period.metricLabel)}</div><div style="font-weight:900;">${escapeHtml(
-          fmtMoney(periodTotal)
-        )}</div></div>
-        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">All time</div><div style="font-weight:900;">${escapeHtml(
-          fmtMoney(allTimeTotal)
-        )}</div></div>
-
+        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">${escapeHtml(period.metricLabel)}</div><div style="font-weight:900;">${escapeHtml(fmtMoney(periodTotal))}</div></div>
+        <div style="display:flex; justify-content:space-between; gap:10px;"><div style="opacity:.85;">All time</div><div style="font-weight:900;">${escapeHtml(fmtMoney(allTimeTotal))}</div></div>
         <div style="font-size:12px; opacity:.75;">
           Earnings are posted after clock-out (tracked shifts) or after shift end (no-tracking shifts).
           If a no-tracking shift ended recently, it may take a few minutes to appear.
@@ -447,7 +458,6 @@ function formatWhenLabel(yyyyMmDd) {
   if (diffDays === 1) return "Tomorrow";
   return String(yyyyMmDd);
 }
-
 
 function getCurrentPayPeriod({ now, paymentFrequency }) {
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
