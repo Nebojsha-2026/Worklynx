@@ -68,49 +68,15 @@ export async function updateOrgMemberPaymentFrequency({
   const supabase = getSupabase();
   const normalized = normalizePaymentFrequency(paymentFrequency);
 
-  // First verify the row exists and is readable (so we can distinguish
-  // "RLS blocked update" from "row not found")
-  const { data: existing, error: readErr } = await supabase
-    .from("org_members")
-    .select("user_id, payment_frequency")
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .maybeSingle();
+  // Use SECURITY DEFINER RPC to bypass RLS — the function enforces
+  // its own permission check (caller must be MANAGER/BM/BO in the org)
+  const { error } = await supabase.rpc("update_employee_pay_frequency", {
+    p_org_id: organizationId,
+    p_user_id: userId,
+    p_frequency: normalized,
+  });
 
-  if (readErr) throw readErr;
-
-  if (!existing) {
-    throw new Error("Employee membership not found.");
-  }
-
-  // Perform the update — don't use count:"exact" as it can return 0 under
-  // some RLS configurations even when the update succeeded
-  const { error: updateErr } = await supabase
-    .from("org_members")
-    .update({ payment_frequency: normalized })
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId)
-    .eq("is_active", true);
-
-  if (updateErr) throw updateErr;
-
-  // Verify the update actually took effect by re-reading
-  const { data: updated, error: verifyErr } = await supabase
-    .from("org_members")
-    .select("user_id, payment_frequency")
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (verifyErr) throw verifyErr;
-
-  if (!updated || updated.payment_frequency !== normalized) {
-    throw new Error(
-      "Update was blocked by database permissions. Please ask your Business Owner to grant managers permission to update employee pay frequency in Supabase RLS policies."
-    );
-  }
+  if (error) throw error;
 
   return {
     organization_id: organizationId,
