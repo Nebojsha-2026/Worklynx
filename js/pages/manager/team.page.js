@@ -44,7 +44,6 @@ content.innerHTML = `
     <form id="inviteForm" class="wl-form">
       <label>Email</label>
       <input id="inviteEmail" type="email" required placeholder="name@company.com" />
-
       <button class="wl-btn" type="submit">Generate invite link</button>
     </form>
 
@@ -84,7 +83,6 @@ document.querySelector("#inviteForm").addEventListener("submit", async (e) => {
         <div style="font-weight:800;">Invite created</div>
         <div style="margin-top:6px;">Email: <code>${escapeHtml(res.invited_email)}</code></div>
         <div>Role: <code>${escapeHtml(res.invited_role)}</code></div>
-
         <div style="margin-top:10px;">
           Invite link:
           <input style="width:100%; margin-top:6px; padding:10px; border-radius:12px; border:1px solid var(--wl-border);"
@@ -98,9 +96,6 @@ document.querySelector("#inviteForm").addEventListener("submit", async (e) => {
   }
 });
 
-let payFrequencySupported = true;
-let paymentFrequencySupportMessage = "";
-
 await refreshEmployees();
 
 async function refreshEmployees() {
@@ -108,6 +103,7 @@ async function refreshEmployees() {
   box.innerHTML = `<div style="opacity:.85;">Loading employees…</div>`;
 
   try {
+    // listOrgMembers uses SECURITY DEFINER RPC so it works for managers
     const members = await listOrgMembers({
       organizationId: org.id,
       roles: ["EMPLOYEE"],
@@ -120,35 +116,20 @@ async function refreshEmployees() {
 
     const ids = members.map((m) => m.user_id).filter(Boolean);
 
+    // Use the SECURITY DEFINER RPC to load pay frequencies (bypasses RLS)
     let freqByUserId = new Map();
-    payFrequencySupported = true;
-    paymentFrequencySupportMessage = "";
-
     try {
-      freqByUserId = await loadPaymentFrequencies(ids);
+      freqByUserId = await loadPaymentFrequenciesViaRpc(ids);
     } catch (err) {
-      if (isMissingPaymentFrequencyColumnError(err)) {
-        payFrequencySupported = false;
-        paymentFrequencySupportMessage = "Payment frequency column is missing in database. Please apply migration for org_members.payment_frequency.";
-      } else {
-        throw err;
-      }
+      console.warn("Could not load pay frequencies:", err);
+      // Fall back to empty map — dropdowns will show default
     }
 
     box.innerHTML = `
-      ${
-        !payFrequencySupported
-          ? `<div class="wl-alert wl-alert--error" style="margin-bottom:10px;">${escapeHtml(paymentFrequencySupportMessage)}</div>`
-          : ""
-      }
       <div style="display:grid; gap:10px;">
         ${members.map((m) => renderEmployeeRow(m, freqByUserId.get(m.user_id))).join("")}
       </div>
     `;
-
-    box.querySelectorAll("[data-pay-select], [data-pay-save]").forEach((el) => {
-      if (!payFrequencySupported) el.setAttribute("disabled", "disabled");
-    });
 
     box.querySelectorAll("[data-pay-save]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -159,11 +140,6 @@ async function refreshEmployees() {
         if (!userId || !select) return;
 
         const next = normalizePaymentFrequency(select.value);
-
-        if (!payFrequencySupported) {
-          msg.innerHTML = `<span style="color:#dc2626;">Migration required</span>`;
-          return;
-        }
 
         try {
           btn.disabled = true;
@@ -176,6 +152,11 @@ async function refreshEmployees() {
           });
 
           msg.innerHTML = `<span style="color:#16a34a;">Saved ✅</span>`;
+
+          // Clear the success message after 3 seconds
+          setTimeout(() => {
+            if (msg) msg.innerHTML = "";
+          }, 3000);
         } catch (err) {
           console.error(err);
           msg.innerHTML = `<span style="color:#dc2626;">${escapeHtml(err.message || "Failed to save")}</span>`;
@@ -188,6 +169,28 @@ async function refreshEmployees() {
     console.error(err);
     box.innerHTML = `<div class="wl-alert wl-alert--error">Failed to load employees.</div>`;
   }
+}
+
+/**
+ * Load payment frequencies using the list_org_members RPC which is SECURITY DEFINER.
+ * This works even when managers can't directly query org_members rows for other users.
+ */
+async function loadPaymentFrequenciesViaRpc(userIds) {
+  if (!userIds.length) return new Map();
+
+  // list_org_members already returns payment_frequency if the column exists
+  const { data, error } = await supabase.rpc("list_org_members", {
+    p_org_id: org.id,
+    p_roles: ["EMPLOYEE"],
+  });
+
+  if (error) throw error;
+
+  return new Map(
+    (data || [])
+      .filter((r) => userIds.includes(r.user_id))
+      .map((r) => [r.user_id, r.payment_frequency])
+  );
 }
 
 function renderEmployeeRow(member, paymentFrequency) {
@@ -217,34 +220,12 @@ function renderEmployeeRow(member, paymentFrequency) {
   `;
 }
 
-async function loadPaymentFrequencies(userIds) {
-  if (!userIds.length) return new Map();
-
-  const { data, error } = await supabase
-    .from("org_members")
-    .select("user_id, payment_frequency")
-    .eq("organization_id", org.id)
-    .in("user_id", userIds)
-    .eq("role", "EMPLOYEE")
-    .eq("is_active", true);
-
-  if (error) throw error;
-
-  return new Map((data || []).map((r) => [r.user_id, r.payment_frequency]));
-}
-
-
 function getMemberDisplayName(member) {
   const fullName = String(member?.full_name || "").trim();
   if (fullName) return fullName;
   const email = String(member?.email || "").trim();
   if (email) return email;
   return "Employee";
-}
-
-function isMissingPaymentFrequencyColumnError(err) {
-  const text = String(err?.message || err?.details || err?.hint || "").toLowerCase();
-  return text.includes("payment_frequency") && text.includes("column");
 }
 
 function escapeHtml(str) {
