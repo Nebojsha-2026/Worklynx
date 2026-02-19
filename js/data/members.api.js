@@ -64,6 +64,7 @@ export async function updateOrgMemberPaymentFrequency({
   organizationId,
   userId,
   paymentFrequency,
+  role = "EMPLOYEE",
 }) {
   const supabase = getSupabase();
   const normalized = normalizePaymentFrequency(paymentFrequency);
@@ -73,10 +74,15 @@ export async function updateOrgMemberPaymentFrequency({
     .update({ payment_frequency: normalized })
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
+    .eq("role", role)
     .eq("is_active", true)
-    .select("organization_id, user_id, payment_frequency")
-    .single();
+    .select("organization_id, user_id, role, payment_frequency");
 
   if (error) throw error;
-  return data;
+
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
+    throw new Error("No active employee membership found to update payment frequency.");
+  }
+  return rows[0];
 }
