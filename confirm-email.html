@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="icon" href="assets/images/favicon.ico" />
+  <title>Email Confirmed – WorkLynx</title>
+</head>
+<body>
+  <main class="wl-auth">
+    <div class="wl-auth__logo">
+      <img src="assets/images/logo.svg" alt="WorkLynx" height="32" />
+    </div>
+
+    <!-- Shown while we verify the token from the URL -->
+    <div id="stateLoading" style="text-align:center; padding:20px 0;">
+      <p style="color:var(--muted);">Verifying your email…</p>
+    </div>
+
+    <!-- Shown on success -->
+    <div id="stateSuccess" style="display:none; text-align:center; padding:8px 0;">
+      <div style="font-size:48px; margin-bottom:12px;">✅</div>
+      <h2 style="margin:0 0 8px;">Email verified!</h2>
+      <p style="color:var(--muted); margin:0 0 24px; font-size:14px;">
+        Your account is active. You can now sign in to WorkLynx.
+      </p>
+      <a class="wl-btn wl-btn--primary" href="login.html">Go to login</a>
+    </div>
+
+    <!-- Shown on error (expired link etc.) -->
+    <div id="stateError" style="display:none; text-align:center; padding:8px 0;">
+      <div style="font-size:48px; margin-bottom:12px;">⚠️</div>
+      <h2 style="margin:0 0 8px;">Verification failed</h2>
+      <p id="errorMsg" style="color:var(--muted); margin:0 0 24px; font-size:14px;">
+        This link may have expired. Request a new one below.
+      </p>
+      <form id="resendForm" class="wl-form" style="text-align:left; margin-bottom:16px;">
+        <label>Your email address</label>
+        <input id="resendEmail" type="email" required placeholder="jane@company.com" />
+        <button id="resendBtn" class="wl-btn wl-btn--primary" type="submit">Resend confirmation email</button>
+      </form>
+      <div id="resendMsg" class="wl-alert" style="display:none;"></div>
+      <a href="login.html" style="font-size:13px;">← Back to login</a>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="js/pages/confirm-email.page.js"></script>
+</body>
+</html>
