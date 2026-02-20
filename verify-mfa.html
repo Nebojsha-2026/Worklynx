@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="icon" href="assets/images/favicon.ico" />
+  <title>Two-Factor Authentication – WorkLynx</title>
+</head>
+<body>
+  <main class="wl-auth">
+    <div class="wl-auth__logo">
+      <img src="assets/images/logo.svg" alt="WorkLynx" height="32" />
+    </div>
+
+    <div id="mfaMsg" class="wl-alert" style="display:none; margin-bottom:14px;"></div>
+
+    <form id="mfaForm" class="wl-form">
+      <h1 style="margin:0 0 8px;">Two-factor authentication</h1>
+      <p style="color:var(--muted); margin:0 0 20px; font-size:14px;">
+        Open your authenticator app (e.g. Google Authenticator) and enter the 6-digit code for WorkLynx.
+      </p>
+
+      <label>Authentication code</label>
+      <input
+        id="totpCode"
+        type="text"
+        inputmode="numeric"
+        pattern="[0-9]{6}"
+        maxlength="6"
+        required
+        autocomplete="one-time-code"
+        placeholder="000000"
+        style="letter-spacing:6px; font-size:22px; text-align:center;"
+      />
+
+      <button id="mfaBtn" class="wl-btn wl-btn--primary" type="submit">Verify</button>
+    </form>
+
+    <p style="margin-top:20px; font-size:13px; text-align:center;">
+      <a href="login.html">← Sign in with a different account</a>
+    </p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="js/pages/verify-mfa.page.js"></script>
+</body>
+</html>
