@@ -136,11 +136,14 @@ function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
   const now = new Date();
   const currentPeriod = getPeriodForDate({ date: now, paymentFrequency });
 
-  // Filter to only shifts that fall within the current pay period
+  // Filter to only shifts that fall within the current pay period (day-level comparison)
+  const fromDay = dateToDayNum(currentPeriod.from);
+  const toDay = dateToDayNum(currentPeriod.to);
   const currentShifts = shifts.filter(s => {
     const d = pickShiftDate(s);
     if (!d) return false;
-    return d >= currentPeriod.from && d <= currentPeriod.to;
+    const day = dateToDayNum(d);
+    return day >= fromDay && day <= toDay;
   });
 
   if (!currentShifts.length) {
@@ -350,14 +353,16 @@ function getPeriodForDate({ date, paymentFrequency }) {
     return makePeriod({ from, to, freq });
   }
 
-  // FORTNIGHTLY — anchor to 2024-01-01 (Monday)
+  // FORTNIGHTLY — anchor to 2024-01-01 (a Monday), DST-safe integer day arithmetic
   const weekStart = startOfWeek(d);
-  const anchor = new Date(2024, 0, 1);
-  anchor.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((weekStart.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
+  // Use integer day counts to avoid DST hour shifts skewing the division
+  const anchorDayNum = dateToDayNum(new Date(2024, 0, 1));
+  const weekStartDayNum = dateToDayNum(weekStart);
+  const diffDays = weekStartDayNum - anchorDayNum;
   const fortnightIndex = Math.floor(diffDays / 14);
-  const from = new Date(anchor.getTime() + fortnightIndex * 14 * 24 * 60 * 60 * 1000);
-  const to = new Date(from.getTime() + 13 * 24 * 60 * 60 * 1000);
+  const fromDayNum = anchorDayNum + fortnightIndex * 14;
+  const from = dayNumToDate(fromDayNum);
+  const to = dayNumToDate(fromDayNum + 13);
   return makePeriod({ from, to, freq: "FORTNIGHTLY" });
 }
 
@@ -403,7 +408,21 @@ function toCsv(group, timesheetMap) {
   return [header, ...rows].map(cols => cols.map(csvEscape).join(",")).join("\n");
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── DST-safe day arithmetic ───────────────────────────────────────────────────
+// Converts a local Date to an integer "day number" (days since Unix epoch in local time)
+// This avoids DST shifts causing off-by-one errors when dividing milliseconds.
+function dateToDayNum(d) {
+  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
+}
+
+function dayNumToDate(dayNum) {
+  const ms = dayNum * 86400000;
+  const d = new Date(ms);
+  // Construct from UTC parts to avoid DST offset on the epoch boundary
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+
 
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
