@@ -1,6 +1,7 @@
 // js/ui/header.js
 import { path, CONFIG } from "../core/config.js";
 import { signOut } from "../core/auth.js";
+import { initNotificationBell } from "./notificationBell.js";
 
 const PLACEHOLDER_ORG_LOGO = path("/assets/images/placeholder-company-logo.png");
 
@@ -24,10 +25,9 @@ export function renderHeader({ companyName, companyLogoUrl } = {}) {
   const header = document.createElement("header");
   header.className = "wl-header";
 
-  const logoMark = path("/assets/images/logo-mark.png");
-
+  const logoMark  = path("/assets/images/logo-mark.png");
   const globeIcon = path("/assets/icons/globe.svg");
-  const bellIcon = path("/assets/icons/bell.svg");
+  const bellIcon  = path("/assets/icons/bell.svg");
 
   header.innerHTML = `
     <div class="wl-header__inner">
@@ -62,15 +62,16 @@ export function renderHeader({ companyName, companyLogoUrl } = {}) {
           <div id="wlLangMenu" class="wl-card" style="
               display:none; position:absolute; right:0; top:42px; width:180px;
               padding:8px; background: rgba(0,0,0,0.35);">
-            ${langItem("English", "en")}
-            ${langItem("Macedonian", "mk")}
-            ${langItem("Indian", "hi")}
-            ${langItem("Chinese", "zh")}
+            ${langItem("English",     "en")}
+            ${langItem("Macedonian",  "mk")}
+            ${langItem("Indian",      "hi")}
+            ${langItem("Chinese",     "zh")}
             ${langItem("Philippines", "fil")}
-            ${langItem("Indonesian", "id")}
+            ${langItem("Indonesian",  "id")}
           </div>
         </div>
 
+        <!-- Bell rendered here; notificationBell.js wraps it after mount -->
         <button id="wlBell" class="wl-btn" type="button" title="Notifications" style="padding:8px 10px;">
           <img src="${bellIcon}" alt="Notifications" style="width:18px; height:18px; vertical-align:middle;">
         </button>
@@ -93,29 +94,27 @@ export function renderHeader({ companyName, companyLogoUrl } = {}) {
     </div>
   `;
 
-  // Account dropdown
-  const accBtn = header.querySelector("#wlAccountBtn");
+  // ── Account dropdown ───────────────────────────────────────────────────────
+  const accBtn  = header.querySelector("#wlAccountBtn");
   const accMenu = header.querySelector("#wlAccountMenu");
   accBtn.addEventListener("click", () => {
     accMenu.style.display = accMenu.style.display === "none" ? "block" : "none";
   });
 
-  // Language menu
-  const langBtn = header.querySelector("#wlLangBtn");
+  // ── Language menu ──────────────────────────────────────────────────────────
+  const langBtn  = header.querySelector("#wlLangBtn");
   const langMenu = header.querySelector("#wlLangMenu");
   langBtn.addEventListener("click", () => {
     langMenu.style.display = langMenu.style.display === "none" ? "block" : "none";
   });
-
   header.querySelectorAll("[data-lang]").forEach((el) => {
     el.addEventListener("click", () => {
-      const code = el.getAttribute("data-lang");
-      console.log("Language set:", code);
+      console.log("Language set:", el.getAttribute("data-lang"));
       langMenu.style.display = "none";
     });
   });
 
-  // Close menus on outside click
+  // ── Close menus on outside click ───────────────────────────────────────────
   document.addEventListener("click", (e) => {
     if (!header.contains(e.target)) {
       accMenu.style.display = "none";
@@ -123,15 +122,19 @@ export function renderHeader({ companyName, companyLogoUrl } = {}) {
     }
   });
 
-  // Logout
+  // ── Logout ─────────────────────────────────────────────────────────────────
   header.querySelector("#wlLogout").addEventListener("click", async () => {
     await signOut();
     window.location.replace(path("/login.html"));
   });
 
-  // Notifications placeholder
-  header.querySelector("#wlBell").addEventListener("click", () => {
-    alert("Notifications (coming soon)");
+  // ── Notification bell ─────────────────────────────────────────────────────
+  // Defer one microtask so document.body.prepend(header) has already run
+  // before initNotificationBell() queries #wlBell from the live DOM.
+  Promise.resolve().then(() => {
+    initNotificationBell().catch((err) =>
+      console.warn("[header] notification bell init failed:", err)
+    );
   });
 
   return header;
@@ -146,6 +149,6 @@ function escapeHtml(str) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll('"',  "&quot;")
+    .replaceAll("'",  "&#039;");
 }
