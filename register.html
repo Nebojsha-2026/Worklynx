@@ -3,29 +3,56 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="referrer" content="no-referrer" />
   <link rel="stylesheet" href="assets/css/app.css" />
   <link rel="icon" href="assets/images/favicon.ico" />
-  <title>Register - WorkLynx</title>
+  <title>Create Account – WorkLynx</title>
 </head>
 <body>
   <main class="wl-auth">
-    <h1>Create account</h1>
+    <div class="wl-auth__logo">
+      <img src="assets/images/logo.svg" alt="WorkLynx" height="32" />
+    </div>
 
+    <div id="registerMsg" class="wl-alert" style="display:none; margin-bottom:14px;"></div>
+
+    <!-- Registration form -->
     <form id="registerForm" class="wl-form">
+      <h1 style="margin:0 0 20px;">Create your account</h1>
+
       <label>Full name</label>
-      <input id="fullName" type="text" required />
+      <input id="fullName" type="text" required autocomplete="name" placeholder="Jane Smith" />
 
-      <label>Email</label>
-      <input id="email" type="email" required />
+      <label>Work email</label>
+      <input id="email" type="email" required autocomplete="email" placeholder="jane@company.com" />
 
-      <label>Password</label>
-      <input id="password" type="password" required minlength="6" />
+      <label>
+        Password
+        <span style="font-weight:400; opacity:.65; font-size:13px;">(min 8 characters)</span>
+      </label>
+      <input id="password" type="password" required minlength="8" autocomplete="new-password" placeholder="••••••••" />
 
-      <button class="wl-btn" type="submit">Create account</button>
+      <button id="registerBtn" class="wl-btn wl-btn--primary" type="submit">Create account</button>
     </form>
 
-    <p>Already have an account? <a href="login.html">Log in</a></p>
+    <!-- Shown after successful signup instead of the form -->
+    <div id="verifyPending" style="display:none; text-align:center; padding:8px 0;">
+      <div style="font-size:48px; margin-bottom:12px;">📬</div>
+      <h2 style="margin:0 0 8px;">Check your inbox</h2>
+      <p style="color:var(--muted); margin:0 0 4px; font-size:14px;">We've sent a confirmation link to:</p>
+      <p style="font-weight:600; margin:0 0 20px;" id="pendingEmail"></p>
+      <p style="color:var(--muted); font-size:13px; margin:0 0 16px;">
+        Click the link in that email to verify your address, then you can log in.
+        Don't forget to check your spam folder.
+      </p>
+      <button id="resendBtn" class="wl-btn" type="button">Resend email</button>
+      <p style="margin-top:20px; font-size:13px;">
+        <a href="login.html">← Back to login</a>
+      </p>
+    </div>
+
+    <p style="margin-top:20px; font-size:13px; text-align:center;">
+      Already have an account? <a href="login.html">Log in</a>
+    </p>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
