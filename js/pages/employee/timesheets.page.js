@@ -194,22 +194,6 @@ function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
   });
 }
 
-// ── (kept for potential future use)
-function groupByPayPeriod({ shifts, paymentFrequency }) {
-  const now = new Date();
-  const grouped = new Map();
-  const seed = getPeriodForDate({ date: now, paymentFrequency });
-  grouped.set(seed.key, { ...seed, shifts: [] });
-  for (const shift of shifts) {
-    const date = pickShiftDate(shift);
-    if (!date) continue;
-    const p = getPeriodForDate({ date, paymentFrequency });
-    if (!grouped.has(p.key)) grouped.set(p.key, { ...p, shifts: [] });
-    grouped.get(p.key).shifts.push(shift);
-  }
-  return [...grouped.values()].sort((a, b) => b.from.getTime() - a.from.getTime());
-}
-
 function renderShiftRow(shift, timesheet) {
   const status = String(shift.status || "PUBLISHED").toUpperCase();
   const isCancelled = status === "CANCELLED";
