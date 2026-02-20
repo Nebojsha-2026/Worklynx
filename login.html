@@ -3,27 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="referrer" content="no-referrer" />
   <link rel="stylesheet" href="assets/css/app.css" />
   <link rel="icon" href="assets/images/favicon.ico" />
-  <title>Login - WorkLynx</title>
+  <title>Sign In – WorkLynx</title>
 </head>
 <body>
   <main class="wl-auth">
-    <h1>Login</h1>
+    <div class="wl-auth__logo">
+      <img src="assets/images/logo.svg" alt="WorkLynx" height="32" />
+    </div>
+
+    <div id="loginMsg" class="wl-alert" style="display:none; margin-bottom:14px;"></div>
 
     <form id="loginForm" class="wl-form">
+      <h1 style="margin:0 0 20px;">Sign in</h1>
+
       <label>Email</label>
-      <input id="email" type="email" required />
+      <input id="email" type="email" required autocomplete="email" placeholder="jane@company.com" />
 
-      <label>Password</label>
-      <input id="password" type="password" required />
+      <label>
+        Password
+        <a href="forgot-password.html" style="float:right; font-weight:400; font-size:13px;">
+          Forgot password?
+        </a>
+      </label>
+      <input id="password" type="password" required autocomplete="current-password" placeholder="••••••••" />
 
-      <button class="wl-btn" type="submit">Sign in</button>
+      <button id="loginBtn" class="wl-btn wl-btn--primary" type="submit">Sign in</button>
     </form>
 
-    <p><a href="forgot-password.html">Forgot password?</a></p>
-    <p>New? <a href="register.html">Create account</a></p>
+    <p style="margin-top:20px; font-size:13px; text-align:center;">
+      Don't have an account? <a href="register.html">Create one</a>
+    </p>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
