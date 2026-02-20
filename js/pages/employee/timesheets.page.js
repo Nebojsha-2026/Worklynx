@@ -330,7 +330,7 @@ function toCsv(group, timesheetMap) {
 
 // Days since Unix epoch in LOCAL calendar time (unaffected by DST hour shifts).
 function dateToDayNum(d) {
-  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 }
 
 // Convert day number back to a local-midnight Date, using UTC parts to avoid DST offset.
