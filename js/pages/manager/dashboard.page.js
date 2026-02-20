@@ -35,7 +35,7 @@ const content = main.querySelector("#wlContent");
 content.innerHTML = `
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
     <h1 style="margin:0;">Manager dashboard</h1>
-    <a class="wl-btn" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
+    <a class="wl-btn wl-btn--primary" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
   </div>
 
   <section class="wl-card wl-panel" style="margin-top:14px;">
@@ -64,7 +64,6 @@ async function loadUpcoming() {
   try {
     const all = await listShifts({ organizationId: org.id, limit: 200 });
 
-    // Upcoming: only Active-ish statuses
     const allowed = new Set(["PUBLISHED", "ACTIVE", "OFFERED"]);
     const visible = (all || []).filter((s) =>
       allowed.has(String(s.status || "").toUpperCase())
@@ -79,7 +78,6 @@ async function loadUpcoming() {
       return;
     }
 
-    // Sort by date then start time (start_at is TIME)
     visible.sort((a, b) => {
       const ad = String(a.shift_date || "");
       const bd = String(b.shift_date || "");
@@ -87,7 +85,6 @@ async function loadUpcoming() {
       return String(a.start_at || "").localeCompare(String(b.start_at || ""));
     });
 
-    // Load EMPLOYEE labels (user_id -> label)
     const members = await listOrgMembers({
       organizationId: org.id,
       roles: ["EMPLOYEE"],
@@ -100,11 +97,10 @@ async function loadUpcoming() {
       ])
     );
 
-    // Load assignments for these visible shifts
     const shiftIds = visible.map((s) => s.id);
     const assigns = await listAssignmentsForShifts({ shiftIds });
 
-    const assignedByShift = new Map(); // shiftId -> [employee_user_id]
+    const assignedByShift = new Map();
     for (const a of assigns || []) {
       const sid = a.shift_id;
       const arr = assignedByShift.get(sid) || [];
@@ -112,10 +108,8 @@ async function loadUpcoming() {
       assignedByShift.set(sid, arr);
     }
 
-    // Controls: show 4 by default, toggle to 10
     const DEFAULT_LIMIT = 4;
     const EXPANDED_LIMIT = 10;
-
     const state = { expanded: false };
 
     function render() {
@@ -163,9 +157,7 @@ async function loadUpcoming() {
             canExpand
               ? `
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; opacity:.9;">
-              <input id="toggleMore" type="checkbox" ${
-                state.expanded ? "checked" : ""
-              } />
+              <input id="toggleMore" type="checkbox" ${state.expanded ? "checked" : ""} />
               Show up to ${EXPANDED_LIMIT}
             </label>
           `
@@ -174,9 +166,7 @@ async function loadUpcoming() {
 
           ${
             hasMoreThan10
-              ? `<a class="wl-btn" href="${path(
-                  "/app/manager/shifts.html"
-                )}">View all →</a>`
+              ? `<a class="wl-btn" href="${path("/app/manager/shifts.html")}">View all →</a>`
               : ""
           }
         </div>
@@ -208,11 +198,23 @@ function renderShiftCard(s, assignedIds, labelMap) {
   const assignedCount = assignedIds.length;
   const top2 = assignedIds.slice(0, 2).map((id) => labelMap.get(id) || id);
 
+  // ✅ STEP 5 — Recurring badge
+  const recurBadge = s.is_recurring
+    ? `<span style="
+        padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;
+        background:var(--brand-soft);border:1.5px solid var(--brand-border);color:var(--brand);">
+        ♻ Recurring${!s.recur_end_date ? " · Ongoing" : ""}
+       </span>`
+    : "";
+
   return `
     <a class="wl-card wl-panel" href="${href}" style="display:block; padding:12px;">
       <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
         <div>
-          <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+            <span style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</span>
+            ${recurBadge}
+          </div>
           <div style="font-size:13px; opacity:.85; margin-top:4px;">
             ${escapeHtml(s.shift_date)} • ${escapeHtml(s.start_at)} → ${escapeHtml(s.end_at)}
           </div>
