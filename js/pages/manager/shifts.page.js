@@ -36,9 +36,12 @@ main.querySelector("#wlSidebar").append(renderSidebar("MANAGER"));
 
 const content = main.querySelector("#wlContent");
 content.innerHTML = `
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <h1 style="margin:0;">Shifts</h1>
-    <a class="wl-btn" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a class="wl-btn" href="${path("/app/manager/recurring-series.html")}">♻ Recurring Series</a>
+      <a class="wl-btn wl-btn--primary" href="${path("/app/manager/create-shift.html")}">+ Create shift</a>
+    </div>
   </div>
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
@@ -60,7 +63,7 @@ try {
       </div>
     `;
   } else {
-    // Sort by date then start time (start_at is TIME)
+    // Sort by date then start time
     shifts.sort((a, b) => {
       const ad = String(a.shift_date || "");
       const bd = String(b.shift_date || "");
@@ -87,7 +90,7 @@ try {
       ? await listAssignmentsForShifts({ shiftIds })
       : [];
 
-    const assignedByShift = new Map(); // shiftId -> [employee_user_id]
+    const assignedByShift = new Map();
     for (const a of assigns || []) {
       const sid = a.shift_id;
       const arr = assignedByShift.get(sid) || [];
@@ -120,11 +123,23 @@ function renderShiftRow(s, assignedIds, labelMap) {
   const assignedCount = assignedIds.length;
   const top2 = assignedIds.slice(0, 2).map((id) => labelMap.get(id) || id);
 
+  // ✅ STEP 5 — Recurring badge
+  const recurBadge = s.is_recurring
+    ? `<span style="
+        padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;
+        background:var(--brand-soft);border:1.5px solid var(--brand-border);color:var(--brand);">
+        ♻ Recurring${!s.recur_end_date ? " · Ongoing" : ""}
+       </span>`
+    : "";
+
   return `
     <a class="wl-card wl-panel" href="${href}" style="display:block;">
       <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
         <div>
-          <div style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+            <span style="font-weight:800;">${escapeHtml(s.title || "Untitled shift")}</span>
+            ${recurBadge}
+          </div>
 
           <div style="opacity:.85; font-size:13px; margin-top:4px;">
             ${escapeHtml(s.shift_date || "")} • ${escapeHtml(s.start_at || "")} → ${escapeHtml(s.end_at || "")}
