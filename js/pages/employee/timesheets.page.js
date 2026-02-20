@@ -332,17 +332,17 @@ function getPeriodForDate({ date, paymentFrequency }) {
   }
 
   if (freq === "WEEKLY") {
-    const from = startOfWeek(d);
-    const to = new Date(from.getTime() + 6 * 24 * 60 * 60 * 1000);
+    // Week runs Mon–Sun
+    const monDayNum = mondayOf(d);
+    const from = dayNumToDate(monDayNum);
+    const to = dayNumToDate(monDayNum + 6);
     return makePeriod({ from, to, freq });
   }
 
-  // FORTNIGHTLY — anchor to 2024-01-01 (a Monday), DST-safe integer day arithmetic
-  const weekStart = startOfWeek(d);
-  // Use integer day counts to avoid DST hour shifts skewing the division
+  // FORTNIGHTLY — anchor to 2024-01-01 (a Monday). Work in day numbers, no startOfWeek().
   const anchorDayNum = dateToDayNum(new Date(2024, 0, 1));
-  const weekStartDayNum = dateToDayNum(weekStart);
-  const diffDays = weekStartDayNum - anchorDayNum;
+  const dayNum = dateToDayNum(d);
+  const diffDays = dayNum - anchorDayNum;
   const fortnightIndex = Math.floor(diffDays / 14);
   const fromDayNum = anchorDayNum + fortnightIndex * 14;
   const from = dayNumToDate(fromDayNum);
@@ -395,6 +395,13 @@ function toCsv(group, timesheetMap) {
 // ── DST-safe day arithmetic ───────────────────────────────────────────────────
 // Converts a local Date to an integer "day number" (days since Unix epoch in local time)
 // This avoids DST shifts causing off-by-one errors when dividing milliseconds.
+function mondayOf(d) {
+  // Returns the day number (days since epoch) of the Monday of d's week
+  const day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  const offsetToMonday = (day + 6) % 7; // Sun->6, Mon->0, Tue->1 ...
+  return dateToDayNum(d) - offsetToMonday;
+}
+
 function dateToDayNum(d) {
   return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
 }
