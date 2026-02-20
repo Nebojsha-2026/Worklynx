@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="icon" href="assets/images/favicon.ico" />
+  <title>Set Up Two-Factor Auth – WorkLynx</title>
+</head>
+<body>
+  <main class="wl-auth" style="max-width:440px;">
+    <div class="wl-auth__logo">
+      <img src="assets/images/logo.svg" alt="WorkLynx" height="32" />
+    </div>
+
+    <div id="mfaMsg" class="wl-alert" style="display:none; margin-bottom:14px;"></div>
+
+    <!-- Step 1: Show QR code -->
+    <div id="stepQr" style="display:none;">
+      <h1 style="margin:0 0 8px;">Set up two-factor authentication</h1>
+      <p style="color:var(--muted); margin:0 0 16px; font-size:14px;">
+        Scan the QR code below with your authenticator app
+        (Google Authenticator, Authy, 1Password, etc.).
+      </p>
+
+      <div style="text-align:center; margin:16px 0;">
+        <img id="qrImage" src="" alt="Scan this QR code" style="width:200px; height:200px; border:1px solid var(--border); border-radius:8px;" />
+      </div>
+
+      <details style="margin-bottom:16px;">
+        <summary style="font-size:13px; color:var(--muted); cursor:pointer;">
+          Can't scan? Enter the code manually
+        </summary>
+        <code id="secretCode" style="display:block; margin-top:8px; padding:8px 12px; background:var(--surface-2); border-radius:6px; font-size:13px; word-break:break-all;"></code>
+      </details>
+
+      <p style="color:var(--muted); margin:0 0 8px; font-size:14px;">
+        Then enter the 6-digit code from the app to confirm setup:
+      </p>
+
+      <form id="verifyForm" class="wl-form">
+        <input
+          id="totpCode"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]{6}"
+          maxlength="6"
+          required
+          autocomplete="one-time-code"
+          placeholder="000000"
+          style="letter-spacing:6px; font-size:22px; text-align:center;"
+        />
+        <button id="verifyBtn" class="wl-btn wl-btn--primary" type="submit">Confirm and enable 2FA</button>
+      </form>
+
+      <p style="margin-top:12px; text-align:center;">
+        <button id="cancelBtn" class="wl-btn" type="button" style="background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px;">
+          Cancel
+        </button>
+      </p>
+    </div>
+
+    <!-- Step 2: Success -->
+    <div id="stepSuccess" style="display:none; text-align:center; padding:8px 0;">
+      <div style="font-size:48px; margin-bottom:12px;">🔒</div>
+      <h2 style="margin:0 0 8px;">2FA enabled!</h2>
+      <p style="color:var(--muted); margin:0 0 24px; font-size:14px;">
+        Your account is now protected with two-factor authentication.
+        You'll need your authenticator app each time you sign in.
+      </p>
+      <a id="backLink" class="wl-btn wl-btn--primary" href="#">Done</a>
+    </div>
+
+    <!-- Loading -->
+    <div id="stepLoading" style="text-align:center; padding:20px 0;">
+      <p style="color:var(--muted);">Loading…</p>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="js/pages/setup-mfa.page.js"></script>
+</body>
+</html>
