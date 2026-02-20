@@ -2,6 +2,7 @@
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
+import { tickRecurringSeries } from "../../data/recurring.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
@@ -14,6 +15,8 @@ await requireRole(["EMPLOYEE"]);
 
 const org = await loadOrgContext();
 const supabase = getSupabase();
+
+tickRecurringSeries(org.id);
 
 document.body.prepend(
   renderHeader({
