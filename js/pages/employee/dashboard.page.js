@@ -209,38 +209,38 @@ function renderToday({ upcoming, active }) {
 
   todayPillEl.innerHTML = `<span class="wl-badge wl-badge--draft">Not clocked in</span>`;
 
-  const nextShift = upcoming.find((s) => shiftStartMs(s) >= now.getTime())
-    || upcoming.find((s) => String(s.shift_date) === today)
-    || null;
+  // Only show a shift in the Today card if it is actually scheduled for today.
+  const todayShift = upcoming.find((s) => String(s.shift_date) === today) || null;
 
-  if (!nextShift) {
-    todaySubEl.textContent = "No upcoming shifts.";
+  if (!todayShift) {
+    // Show next upcoming shift date in the subtitle, but don't render it in the Today body.
+    const nextShift = upcoming.find((s) => shiftStartMs(s) > now.getTime()) || null;
+    todaySubEl.textContent = nextShift
+      ? `Next shift: ${formatWhenLabel(nextShift.shift_date)}`
+      : "No upcoming shifts.";
     todayBodyEl.innerHTML  = `
       <div class="wl-alert">
-        You have no assigned shifts in the next 14 days.
-        <div class="wl-subtext" style="margin-top:4px;">Contact your manager if this seems wrong.</div>
+        You have no shift scheduled for today.
+        <div class="wl-subtext" style="margin-top:4px;">Check your upcoming shifts or contact your manager.</div>
       </div>`;
     return;
   }
 
-  const isToday = String(nextShift.shift_date) === today;
-  todaySubEl.textContent = isToday
-    ? "You have a shift today."
-    : `Next shift: ${formatWhenLabel(nextShift.shift_date)}`;
+  todaySubEl.textContent = "You have a shift today.";
 
   todayBodyEl.innerHTML = `
     <div class="wl-alert">
-      <div style="font-weight:800; margin-bottom:6px;">${escapeHtml(nextShift.title || "Shift")}</div>
+      <div style="font-weight:800; margin-bottom:6px;">${escapeHtml(todayShift.title || "Shift")}</div>
       <div class="wl-subtext">
-        <strong>${escapeHtml(formatWhenLabel(nextShift.shift_date))}</strong>
-        · ${escapeHtml(nextShift.start_at || "")} → ${escapeHtml(nextShift.end_at || "")}
-        ${nextShift.location ? ` · 📍 ${escapeHtml(nextShift.location)}` : ""}
+        <strong>Today</strong>
+        · ${escapeHtml(todayShift.start_at || "")} → ${escapeHtml(todayShift.end_at || "")}
+        ${todayShift.location ? ` · 📍 ${escapeHtml(todayShift.location)}` : ""}
       </div>
-      ${nextShift.track_time === false
+      ${todayShift.track_time === false
         ? `<div class="wl-subtext" style="margin-top:4px;">✅ No clock-in required</div>`
         : ""}
       <a class="wl-btn" style="margin-top:10px; display:inline-block;"
-         href="${path(`/app/employee/shift.html?id=${encodeURIComponent(nextShift.id)}`)}">Open shift →</a>
+         href="${path(`/app/employee/shift.html?id=${encodeURIComponent(todayShift.id)}`)}">Open shift →</a>
     </div>`;
 }
 
@@ -346,8 +346,12 @@ async function loadAllShiftEarnings({ userId }) {
 
   if (error) throw error;
 
+  const todayIso = isoDate(new Date());
+
   return (shifts || [])
     .filter((s) => String(s.status || "").toUpperCase() !== "CANCELLED")
+    // Exclude future shifts — earnings are only counted for today or past shifts.
+    .filter((s) => s.shift_date && s.shift_date <= todayIso)
     .map((s) => {
     const amount = calcScheduledPay(s);
     const shiftDateMs = s.shift_date ? new Date(s.shift_date + "T00:00:00").getTime() : null;
