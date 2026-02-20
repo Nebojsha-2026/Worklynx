@@ -67,13 +67,9 @@ try {
 
   periodTagEl.innerHTML = `<span class="wl-badge wl-badge--active">Pay frequency: ${escapeHtml(paymentFrequency)}</span>`;
 
-  // ── Load ALL assigned shifts (this is the source of truth, not the timesheets table)
   const shifts = await loadAllAssignedShifts({ userId });
-
-  // ── Load timesheet rows so we can show clock-in/out status
   const timesheetMap = await loadTimesheetMap({ userId, shiftIds: shifts.map(s => s.id) });
 
-  // ── All-time earnings: sum scheduled pay for non-cancelled shifts
   const nonCancelledShifts = shifts.filter(s => String(s.status || "").toUpperCase() !== "CANCELLED");
   const allTimeTotal = nonCancelledShifts.reduce((sum, s) => sum + calcScheduledPay(s), 0);
   allTimeEarningsEl.textContent = fmtMoney(allTimeTotal);
@@ -84,7 +80,6 @@ try {
   periodListEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to load timesheets.")}</div>`;
 }
 
-// ── Load all shifts the employee is assigned to (all time, all statuses)
 async function loadAllAssignedShifts({ userId }) {
   const assigns = await listMyShiftAssignments();
   const ids = (assigns || []).map(a => a.shift_id).filter(Boolean);
@@ -101,7 +96,6 @@ async function loadAllAssignedShifts({ userId }) {
   return data || [];
 }
 
-// ── Load timesheets keyed by shift_id so we can show clock-in status
 async function loadTimesheetMap({ userId, shiftIds }) {
   if (!shiftIds.length) return new Map();
 
@@ -125,20 +119,17 @@ async function loadTimesheetMap({ userId, shiftIds }) {
   }
 
   const map = new Map();
-  for (const ts of data || []) {
-    map.set(ts.shift_id, ts);
-  }
+  for (const ts of data || []) map.set(ts.shift_id, ts);
   return map;
 }
 
-// ── Render only the current pay period
 function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
   const now = new Date();
   const currentPeriod = getPeriodForDate({ date: now, paymentFrequency });
 
-  // Filter to only shifts that fall within the current pay period (day-level comparison)
   const fromDay = dateToDayNum(currentPeriod.from);
-  const toDay = dateToDayNum(currentPeriod.to);
+  const toDay   = dateToDayNum(currentPeriod.to);
+
   const currentShifts = shifts.filter(s => {
     const d = pickShiftDate(s);
     if (!d) return false;
@@ -151,42 +142,35 @@ function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
     return;
   }
 
-  const groups = [{ ...currentPeriod, shifts: currentShifts }];
+  const group = { ...currentPeriod, shifts: currentShifts };
+  const nonCancelled = group.shifts.filter(s => String(s.status || "").toUpperCase() !== "CANCELLED");
+  const totalPay  = nonCancelled.reduce((sum, s) => sum + calcScheduledPay(s), 0);
+  const totalMins = nonCancelled.reduce((sum, s) => sum + calcScheduledMinutes(s), 0);
+  const csvId = `csv_${group.key}`;
 
-  periodListEl.innerHTML = groups
-    .map(group => {
-      const nonCancelled = group.shifts.filter(s => String(s.status || "").toUpperCase() !== "CANCELLED");
-      const totalPay = nonCancelled.reduce((sum, s) => sum + calcScheduledPay(s), 0);
-      const totalMins = nonCancelled.reduce((sum, s) => sum + calcScheduledMinutes(s), 0);
-      const csvId = `csv_${group.key}`;
-
-      return `
-        <article class="wl-card" style="padding:12px; margin-bottom:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-            <div>
-              <div style="font-size:16px; font-weight:800;">${escapeHtml(group.label)}</div>
-              <div style="font-size:13px; color:#64748b; margin-top:4px;">
-                ${group.shifts.length} shift${group.shifts.length === 1 ? "" : "s"}
-                · ${formatMinutes(totalMins)} scheduled
-                · <strong>${fmtMoney(totalPay)}</strong> earned
-              </div>
-            </div>
-            <button class="wl-btn" data-download="${escapeHtml(csvId)}" type="button">Download CSV</button>
+  periodListEl.innerHTML = `
+    <article class="wl-card" style="padding:12px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:16px; font-weight:800;">${escapeHtml(group.label)}</div>
+          <div style="font-size:13px; color:#64748b; margin-top:4px;">
+            ${group.shifts.length} shift${group.shifts.length === 1 ? "" : "s"}
+            · ${formatMinutes(totalMins)} scheduled
+            · <strong>${fmtMoney(totalPay)}</strong> earned
           </div>
-
-          <div style="display:grid; gap:8px; margin-top:10px;">
-            ${group.shifts.map(s => renderShiftRow(s, timesheetMap.get(s.id))).join("")}
-          </div>
-
-          <textarea id="${escapeHtml(csvId)}" style="display:none;">${escapeHtml(toCsv(group, timesheetMap))}</textarea>
-        </article>
-      `;
-    })
-    .join("");
+        </div>
+        <button class="wl-btn" data-download="${escapeHtml(csvId)}" type="button">Download CSV</button>
+      </div>
+      <div style="display:grid; gap:8px; margin-top:10px;">
+        ${group.shifts.map(s => renderShiftRow(s, timesheetMap.get(s.id))).join("")}
+      </div>
+      <textarea id="${escapeHtml(csvId)}" style="display:none;">${escapeHtml(toCsv(group, timesheetMap))}</textarea>
+    </article>
+  `;
 
   periodListEl.querySelectorAll("[data-download]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-download");
+      const id  = btn.getAttribute("data-download");
       const src = document.getElementById(id);
       if (!src) return;
       downloadCsv({ filename: `${id}.csv`, csv: src.value });
@@ -195,18 +179,16 @@ function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
 }
 
 function renderShiftRow(shift, timesheet) {
-  const status = String(shift.status || "PUBLISHED").toUpperCase();
+  const status      = String(shift.status || "PUBLISHED").toUpperCase();
   const isCancelled = status === "CANCELLED";
-  const scheduledPay = calcScheduledPay(shift);
+  const scheduledPay  = calcScheduledPay(shift);
   const scheduledMins = calcScheduledMinutes(shift);
 
-  // Clock-in/out summary from the timesheet (if it exists)
-  const entries = timesheet?.entries || [];
-  const workedMins = getWorkedMinutes(entries);
-  const hasClockedIn = entries.some(e => e.clock_in);
+  const entries      = timesheet?.entries || [];
+  const workedMins   = getWorkedMinutes(entries);
+  const hasClockedIn  = entries.some(e => e.clock_in);
   const hasClockedOut = entries.some(e => e.clock_out);
 
-  // Time tracking info
   const trackingStatus = shift.track_time === false
     ? `<span style="font-size:12px; color:#64748b;">No tracking required</span>`
     : hasClockedOut
@@ -252,16 +234,11 @@ function calcScheduledPay(shift) {
 
 function calcScheduledMinutes(shift) {
   if (!shift.shift_date || !shift.start_at || !shift.end_at) return 0;
-
-  const startDate = shift.shift_date;
-  const endDate = shift.end_date || shift.shift_date;
-  const startMs = new Date(`${startDate}T${shift.start_at}`).getTime();
-  const endMs = new Date(`${endDate}T${shift.end_at}`).getTime();
-
+  const startMs = new Date(`${shift.shift_date}T${shift.start_at}`).getTime();
+  const endMs   = new Date(`${shift.end_date || shift.shift_date}T${shift.end_at}`).getTime();
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
-
-  const totalMins = Math.max(1, Math.round((endMs - startMs) / 60000));
-  const breakMins = Math.max(0, Number(shift.break_minutes || 0));
+  const totalMins   = Math.max(1, Math.round((endMs - startMs) / 60000));
+  const breakMins   = Math.max(0, Number(shift.break_minutes || 0));
   const paidMinsRaw = shift.break_is_paid ? totalMins : Math.max(0, totalMins - breakMins);
   return roundForPay(paidMinsRaw);
 }
@@ -270,11 +247,8 @@ function roundForPay(mins) {
   if (!mins || mins <= 0) return 0;
   if (mins <= 19) return 0;
   const hours = Math.floor(mins / 60);
-  const rem = mins % 60;
-  let roundedRem = 0;
-  if (rem <= 19) roundedRem = 0;
-  else if (rem <= 44) roundedRem = 30;
-  else roundedRem = 60;
+  const rem   = mins % 60;
+  const roundedRem = rem <= 19 ? 0 : rem <= 44 ? 30 : 60;
   return hours * 60 + roundedRem;
 }
 
@@ -282,35 +256,15 @@ function getWorkedMinutes(entries) {
   return (entries || []).reduce((sum, e) => {
     if (!e.clock_in || !e.clock_out) return sum;
     const start = new Date(e.clock_in).getTime();
-    const end = new Date(e.clock_out).getTime();
+    const end   = new Date(e.clock_out).getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return sum;
-    const gross = Math.round((end - start) / 60000);
+    const gross     = Math.round((end - start) / 60000);
     const breakMins = Math.max(0, Number(e.break_minutes || 0));
     return sum + Math.max(0, gross - breakMins);
   }, 0);
 }
 
-// ── Grouping ──────────────────────────────────────────────────────────────────
-
-function groupByPayPeriod({ shifts, paymentFrequency }) {
-  const now = new Date();
-  const grouped = new Map();
-
-  // Always include the current period even if empty
-  const seed = getPeriodForDate({ date: now, paymentFrequency });
-  grouped.set(seed.key, { ...seed, shifts: [] });
-
-  for (const shift of shifts) {
-    const date = pickShiftDate(shift);
-    if (!date) continue;
-    const p = getPeriodForDate({ date, paymentFrequency });
-    if (!grouped.has(p.key)) grouped.set(p.key, { ...p, shifts: [] });
-    grouped.get(p.key).shifts.push(shift);
-  }
-
-  // Sort most-recent first
-  return [...grouped.values()].sort((a, b) => b.from.getTime() - a.from.getTime());
-}
+// ── Period helpers ────────────────────────────────────────────────────────────
 
 function pickShiftDate(shift) {
   const d = shift?.shift_date;
@@ -322,115 +276,83 @@ function pickShiftDate(shift) {
 }
 
 function getPeriodForDate({ date, paymentFrequency }) {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const freq = normalizePaymentFrequency(paymentFrequency);
 
   if (freq === "MONTHLY") {
-    const from = new Date(d.getFullYear(), d.getMonth(), 1);
-    const to = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const from = new Date(date.getFullYear(), date.getMonth(), 1);
+    const to   = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     return makePeriod({ from, to, freq });
   }
+
+  // WEEKLY and FORTNIGHTLY: always snap to the Monday of the current week first.
+  const monNum = mondayOf(date);   // integer day-number of this week's Monday
 
   if (freq === "WEEKLY") {
-    // Week runs Mon–Sun
-    const monDayNum = mondayOf(d);
-    const from = dayNumToDate(monDayNum);
-    const to = dayNumToDate(monDayNum + 6);
-    return makePeriod({ from, to, freq });
+    return makePeriod({ from: dayNumToDate(monNum), to: dayNumToDate(monNum + 6), freq });
   }
 
-  // FORTNIGHTLY — anchor to 2024-01-01 (a Monday). Work in day numbers, no startOfWeek().
-  const anchorDayNum = dateToDayNum(new Date(2024, 0, 1));
-  const dayNum = dateToDayNum(d);
-  const diffDays = dayNum - anchorDayNum;
-  const fortnightIndex = Math.floor(diffDays / 14);
-  const fromDayNum = anchorDayNum + fortnightIndex * 14;
-  const from = dayNumToDate(fromDayNum);
-  const to = dayNumToDate(fromDayNum + 13);
-  return makePeriod({ from, to, freq: "FORTNIGHTLY" });
+  // FORTNIGHTLY — anchor is 2024-01-01 which is a Monday.
+  // Count how many complete fortnights have passed since that anchor Monday,
+  // using the Monday of the current week so mid-week dates don't straddle a boundary.
+  const anchorNum      = dateToDayNum(new Date(2024, 0, 1));
+  const fortnightIndex = Math.floor((monNum - anchorNum) / 14);
+  const fromNum        = anchorNum + fortnightIndex * 14;
+  return makePeriod({ from: dayNumToDate(fromNum), to: dayNumToDate(fromNum + 13), freq: "FORTNIGHTLY" });
 }
 
 function makePeriod({ from, to, freq }) {
-  const key = `${isoDate(from)}_${freq}`;
+  const key      = `${isoDate(from)}_${freq}`;
   const freqLabel = freq.charAt(0) + freq.slice(1).toLowerCase();
-  const label = `${freqLabel} period · ${ddmmyyyy(from)} → ${ddmmyyyy(to)}`;
+  // DD/MM/YYYY format avoids any ambiguity when reading on a phone
+  const label    = `${freqLabel} period · ${ddmmyyyy(from)} → ${ddmmyyyy(to)}`;
   return { key, from, to, label };
 }
 
-// ── CSV export ────────────────────────────────────────────────────────────────
+// ── CSV ───────────────────────────────────────────────────────────────────────
 
 function toCsv(group, timesheetMap) {
-  const header = [
-    "shift_title",
-    "shift_date",
-    "start_at",
-    "end_at",
-    "location",
-    "status",
-    "scheduled_minutes",
-    "scheduled_pay",
-    "clocked_minutes",
-    "timesheet_status",
-  ];
-
+  const header = ["shift_title","shift_date","start_at","end_at","location","status","scheduled_minutes","scheduled_pay","clocked_minutes","timesheet_status"];
   const rows = group.shifts.map(s => {
-    const ts = timesheetMap.get(s.id);
+    const ts      = timesheetMap.get(s.id);
     const entries = ts?.entries || [];
     return [
-      s.title || "",
-      s.shift_date || "",
-      (s.start_at || "").slice(0, 5),
-      (s.end_at || "").slice(0, 5),
-      s.location || "",
-      s.status || "PUBLISHED",
-      String(calcScheduledMinutes(s)),
-      calcScheduledPay(s).toFixed(2),
-      String(getWorkedMinutes(entries)),
-      ts?.status || "NO_TIMESHEET",
+      s.title || "", s.shift_date || "",
+      (s.start_at || "").slice(0,5), (s.end_at || "").slice(0,5),
+      s.location || "", s.status || "PUBLISHED",
+      String(calcScheduledMinutes(s)), calcScheduledPay(s).toFixed(2),
+      String(getWorkedMinutes(entries)), ts?.status || "NO_TIMESHEET",
     ];
   });
-
   return [header, ...rows].map(cols => cols.map(csvEscape).join(",")).join("\n");
 }
 
-// ── DST-safe day arithmetic ───────────────────────────────────────────────────
-// Converts a local Date to an integer "day number" (days since Unix epoch in local time)
-// This avoids DST shifts causing off-by-one errors when dividing milliseconds.
-function mondayOf(d) {
-  // Returns the day number (days since epoch) of the Monday of d's week
-  const day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
-  const offsetToMonday = (day + 6) % 7; // Sun->6, Mon->0, Tue->1 ...
-  return dateToDayNum(d) - offsetToMonday;
-}
+// ── DST-safe integer day arithmetic ──────────────────────────────────────────
 
+// Days since Unix epoch in LOCAL calendar time (unaffected by DST hour shifts).
 function dateToDayNum(d) {
   return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000);
 }
 
-function dayNumToDate(dayNum) {
-  const ms = dayNum * 86400000;
-  const d = new Date(ms);
-  // Construct from UTC parts to avoid DST offset on the epoch boundary
+// Convert day number back to a local-midnight Date, using UTC parts to avoid DST offset.
+function dayNumToDate(n) {
+  const d = new Date(n * 86400000);
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-
-
-function startOfWeek(d) {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = x.getDay();
-  const diff = (day + 6) % 7; // Mon = 0
-  x.setDate(x.getDate() - diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
+// Day number of the Monday that starts d's ISO week.
+function mondayOf(d) {
+  const offset = (d.getDay() + 6) % 7;   // Sun→6, Mon→0, Tue→1 …
+  return dateToDayNum(d) - offset;
 }
 
+// ── Formatting utilities ──────────────────────────────────────────────────────
+
 function isoDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function ddmmyyyy(d) {
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
 }
 
 function formatDateDDMMYYYY(yyyyMmDd) {
@@ -449,13 +371,13 @@ function fmtMoney(n) {
 }
 
 function renderStatusBadge(status) {
-  const s = String(status || "PUBLISHED").toUpperCase();
+  const s   = String(status || "PUBLISHED").toUpperCase();
   const map = {
-    PUBLISHED: { cls: "wl-badge--active",    label: "Active" },
-    ACTIVE:    { cls: "wl-badge--active",    label: "Active" },
-    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT:     { cls: "wl-badge--draft",     label: "Draft" },
-    OFFERED:   { cls: "wl-badge--offered",   label: "Offered" },
+    PUBLISHED: { cls: "wl-badge--active",    label: "Active"     },
+    ACTIVE:    { cls: "wl-badge--active",    label: "Active"     },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled"  },
+    DRAFT:     { cls: "wl-badge--draft",     label: "Draft"      },
+    OFFERED:   { cls: "wl-badge--offered",   label: "Offered"    },
   };
   const v = map[s] || { cls: "", label: s };
   return `<span class="wl-badge ${v.cls}">${escapeHtml(v.label)}</span>`;
@@ -469,13 +391,10 @@ function csvEscape(value) {
 
 function downloadCsv({ filename, csv }) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
 
