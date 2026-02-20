@@ -14,14 +14,13 @@ export function renderFooter({ version = "v0.1.0" } = {}) {
 
       <div class="wl-footer__col">
         <h4>Support</h4>
-        <a href="${path("/index.html")}">Contact Support</a>
-        <a href="${path("/index.html")}">System Status</a>
+        <a href="mailto:support@worklynx.io">Contact Support</a>
       </div>
 
       <div class="wl-footer__col">
-        <h4>Product</h4>
-        <a href="${path("/index.html")}">Changelog</a>
-        <a href="${path("/index.html")}">Maintenance Schedule</a>
+        <h4>Legal</h4>
+        <a href="${path("/index.html#privacy")}">Privacy Policy</a>
+        <a href="${path("/index.html#terms")}">Terms of Service</a>
       </div>
 
       <div class="wl-footer__col">
