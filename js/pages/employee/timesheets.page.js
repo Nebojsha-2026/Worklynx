@@ -7,6 +7,7 @@ import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
 import { getSession } from "../../core/session.js";
 import { getOrgMember, normalizePaymentFrequency } from "../../data/members.api.js";
+import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
 
 await requireRole(["EMPLOYEE"]);
 
@@ -35,14 +36,14 @@ content.innerHTML = `
   <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
     <div>
       <h1 style="margin:0;">Timesheets</h1>
-      <div style="margin-top:6px; color:#64748b; font-size:13px;">View timesheets by pay period and download CSV.</div>
+      <div style="margin-top:6px; color:#64748b; font-size:13px;">View shifts by pay period. Earnings are based on scheduled hours.</div>
     </div>
     <div id="periodTag"></div>
   </div>
 
   <section class="wl-card wl-panel" style="margin-top:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-      <div style="font-size:14px; color:#64748b;">All-time earnings</div>
+      <div style="font-size:14px; color:#64748b;">All-time earnings (scheduled, non-cancelled)</div>
       <div id="allTimeEarnings" style="font-size:24px; font-weight:900;">—</div>
     </div>
   </section>
@@ -66,63 +67,84 @@ try {
 
   periodTagEl.innerHTML = `<span class="wl-badge wl-badge--active">Pay frequency: ${escapeHtml(paymentFrequency)}</span>`;
 
-  const [timesheets, allTime] = await Promise.all([
-    loadEmployeeTimesheets({ userId }),
-    sumAllTimeEarnings({ userId }),
-  ]);
+  // ── Load ALL assigned shifts (this is the source of truth, not the timesheets table)
+  const shifts = await loadAllAssignedShifts({ userId });
 
-  allTimeEarningsEl.textContent = fmtMoney(allTime);
-  renderTimesheetPeriods({ timesheets, paymentFrequency });
+  // ── Load timesheet rows so we can show clock-in/out status
+  const timesheetMap = await loadTimesheetMap({ userId, shiftIds: shifts.map(s => s.id) });
+
+  // ── All-time earnings: sum scheduled pay for non-cancelled shifts
+  const nonCancelledShifts = shifts.filter(s => String(s.status || "").toUpperCase() !== "CANCELLED");
+  const allTimeTotal = nonCancelledShifts.reduce((sum, s) => sum + calcScheduledPay(s), 0);
+  allTimeEarningsEl.textContent = fmtMoney(allTimeTotal);
+
+  renderShiftPeriods({ shifts, timesheetMap, paymentFrequency });
 } catch (err) {
   console.error(err);
   periodListEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to load timesheets.")}</div>`;
 }
 
-async function loadEmployeeTimesheets({ userId }) {
+// ── Load all shifts the employee is assigned to (all time, all statuses)
+async function loadAllAssignedShifts({ userId }) {
+  const assigns = await listMyShiftAssignments();
+  const ids = (assigns || []).map(a => a.shift_id).filter(Boolean);
+  if (!ids.length) return [];
+
   const { data, error } = await supabase
-    .from("timesheets")
-    .select(
-      `
-      id,
-      shift_id,
-      status,
-      submitted_at,
-      created_at,
-      shift:shifts(title, shift_date, start_at, end_at, location),
-      entries:time_entries(id, clock_in, clock_out, break_minutes)
-    `
-    )
-    .eq("organization_id", org.id)
-    .eq("employee_user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(500);
+    .from("shifts")
+    .select("id, title, shift_date, end_date, start_at, end_at, location, break_minutes, break_is_paid, hourly_rate, status, track_time")
+    .in("id", ids)
+    .order("shift_date", { ascending: false })
+    .limit(1000);
 
   if (error) throw error;
   return data || [];
 }
 
-async function sumAllTimeEarnings({ userId }) {
-  const { data, error } = await supabase
-    .from("earnings")
-    .select("amount")
-    .eq("employee_user_id", userId)
-    .limit(2000);
+// ── Load timesheets keyed by shift_id so we can show clock-in status
+async function loadTimesheetMap({ userId, shiftIds }) {
+  if (!shiftIds.length) return new Map();
 
-  if (error) throw error;
-  return (data || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const { data, error } = await supabase
+    .from("timesheets")
+    .select(`
+      id,
+      shift_id,
+      status,
+      submitted_at,
+      entries:time_entries(id, clock_in, clock_out, break_minutes)
+    `)
+    .eq("organization_id", org.id)
+    .eq("employee_user_id", userId)
+    .in("shift_id", shiftIds)
+    .limit(1000);
+
+  if (error) {
+    console.warn("Could not load timesheets:", error.message);
+    return new Map();
+  }
+
+  const map = new Map();
+  for (const ts of data || []) {
+    map.set(ts.shift_id, ts);
+  }
+  return map;
 }
 
-function renderTimesheetPeriods({ timesheets, paymentFrequency }) {
-  const groups = groupByPayPeriod({ timesheets, paymentFrequency });
-
-  if (!groups.length) {
-    periodListEl.innerHTML = `<div class="wl-alert">No timesheets for your current pay periods yet.</div>`;
+// ── Group shifts by pay period and render
+function renderShiftPeriods({ shifts, timesheetMap, paymentFrequency }) {
+  if (!shifts.length) {
+    periodListEl.innerHTML = `<div class="wl-alert">No assigned shifts found.</div>`;
     return;
   }
 
+  const groups = groupByPayPeriod({ shifts, paymentFrequency });
+
   periodListEl.innerHTML = groups
-    .map((group) => {
-      const totalMinutes = group.timesheets.reduce((sum, ts) => sum + getTimesheetWorkedMinutes(ts), 0);
+    .map(group => {
+      const nonCancelled = group.shifts.filter(s => String(s.status || "").toUpperCase() !== "CANCELLED");
+      const totalPay = nonCancelled.reduce((sum, s) => sum + calcScheduledPay(s), 0);
+      const totalMins = nonCancelled.reduce((sum, s) => sum + calcScheduledMinutes(s), 0);
       const csvId = `csv_${group.key}`;
 
       return `
@@ -131,71 +153,159 @@ function renderTimesheetPeriods({ timesheets, paymentFrequency }) {
             <div>
               <div style="font-size:16px; font-weight:800;">${escapeHtml(group.label)}</div>
               <div style="font-size:13px; color:#64748b; margin-top:4px;">
-                ${group.timesheets.length} timesheet${group.timesheets.length === 1 ? "" : "s"} • ${formatMinutes(totalMinutes)} worked
+                ${group.shifts.length} shift${group.shifts.length === 1 ? "" : "s"}
+                · ${formatMinutes(totalMins)} scheduled
+                · <strong>${fmtMoney(totalPay)}</strong> earned
               </div>
             </div>
             <button class="wl-btn" data-download="${escapeHtml(csvId)}" type="button">Download CSV</button>
           </div>
 
           <div style="display:grid; gap:8px; margin-top:10px;">
-            ${group.timesheets.map(renderTimesheetRow).join("")}
+            ${group.shifts.map(s => renderShiftRow(s, timesheetMap.get(s.id))).join("")}
           </div>
 
-          <textarea id="${escapeHtml(csvId)}" style="display:none;">${escapeHtml(toCsv(group))}</textarea>
+          <textarea id="${escapeHtml(csvId)}" style="display:none;">${escapeHtml(toCsv(group, timesheetMap))}</textarea>
         </article>
       `;
     })
     .join("");
 
-  periodListEl.querySelectorAll("[data-download]").forEach((btn) => {
+  periodListEl.querySelectorAll("[data-download]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-download");
       const src = document.getElementById(id);
       if (!src) return;
-      downloadCsv({
-        filename: `${id}.csv`,
-        csv: src.value,
-      });
+      downloadCsv({ filename: `${id}.csv`, csv: src.value });
     });
   });
 }
 
-function renderTimesheetRow(ts) {
-  const shift = ts.shift || {};
-  const worked = getTimesheetWorkedMinutes(ts);
-  const status = String(ts.status || "OPEN").toUpperCase();
+function renderShiftRow(shift, timesheet) {
+  const status = String(shift.status || "PUBLISHED").toUpperCase();
+  const isCancelled = status === "CANCELLED";
+  const scheduledPay = calcScheduledPay(shift);
+  const scheduledMins = calcScheduledMinutes(shift);
+
+  // Clock-in/out summary from the timesheet (if it exists)
+  const entries = timesheet?.entries || [];
+  const workedMins = getWorkedMinutes(entries);
+  const hasClockedIn = entries.some(e => e.clock_in);
+  const hasClockedOut = entries.some(e => e.clock_out);
+
+  // Time tracking info
+  const trackingStatus = shift.track_time === false
+    ? `<span style="font-size:12px; color:#64748b;">No tracking required</span>`
+    : hasClockedOut
+      ? `<span style="font-size:12px; color:#10b981;">✅ Clocked out · ${formatMinutes(workedMins)} worked</span>`
+      : hasClockedIn
+        ? `<span style="font-size:12px; color:#f59e0b;">⏱ Currently clocked in</span>`
+        : `<span style="font-size:12px; color:#94a3b8;">Not clocked in</span>`;
 
   return `
-    <div class="wl-card" style="padding:10px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
-      <div>
-        <div style="font-weight:700;">${escapeHtml(shift.title || "Untitled shift")}</div>
-        <div style="font-size:13px; color:#64748b; margin-top:4px;">
-          ${escapeHtml(shift.shift_date || "No date")} • ${escapeHtml(shift.start_at || "")} → ${escapeHtml(shift.end_at || "")}
-          ${shift.location ? ` • 📍 ${escapeHtml(shift.location)}` : ""}
+    <div class="wl-card" style="padding:10px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; ${isCancelled ? "opacity:0.55;" : ""}">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          ${escapeHtml(shift.title || "Untitled shift")}
+          ${renderStatusBadge(status)}
         </div>
-        <div style="font-size:12px; color:#64748b; margin-top:4px;">Worked: <b>${escapeHtml(formatMinutes(worked))}</b></div>
+        <div style="font-size:13px; color:#64748b; margin-top:4px;">
+          ${escapeHtml(formatDateDDMMYYYY(shift.shift_date))}
+          · ${escapeHtml((shift.start_at || "").slice(0,5))} → ${escapeHtml((shift.end_at || "").slice(0,5))}
+          ${shift.location ? ` · 📍 ${escapeHtml(shift.location)}` : ""}
+        </div>
+        <div style="margin-top:4px;">${trackingStatus}</div>
       </div>
-      ${renderStatusBadge(status)}
+      <div style="text-align:right; flex-shrink:0;">
+        ${!isCancelled ? `
+          <div style="font-size:13px; color:#64748b;">Scheduled: ${formatMinutes(scheduledMins)}</div>
+          <div style="font-weight:800; font-size:15px; margin-top:2px;">${fmtMoney(scheduledPay)}</div>
+        ` : `
+          <div style="font-size:13px; color:#94a3b8; text-decoration:line-through;">${fmtMoney(scheduledPay)}</div>
+          <div style="font-size:12px; color:#ef4444;">Cancelled</div>
+        `}
+      </div>
     </div>
   `;
 }
 
-function groupByPayPeriod({ timesheets, paymentFrequency }) {
+// ── Pay calculation helpers ───────────────────────────────────────────────────
+
+function calcScheduledPay(shift) {
+  const mins = calcScheduledMinutes(shift);
+  if (!mins || !shift.hourly_rate) return 0;
+  return (mins / 60) * Number(shift.hourly_rate);
+}
+
+function calcScheduledMinutes(shift) {
+  if (!shift.shift_date || !shift.start_at || !shift.end_at) return 0;
+
+  const startDate = shift.shift_date;
+  const endDate = shift.end_date || shift.shift_date;
+  const startMs = new Date(`${startDate}T${shift.start_at}`).getTime();
+  const endMs = new Date(`${endDate}T${shift.end_at}`).getTime();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
+
+  const totalMins = Math.max(1, Math.round((endMs - startMs) / 60000));
+  const breakMins = Math.max(0, Number(shift.break_minutes || 0));
+  const paidMinsRaw = shift.break_is_paid ? totalMins : Math.max(0, totalMins - breakMins);
+  return roundForPay(paidMinsRaw);
+}
+
+function roundForPay(mins) {
+  if (!mins || mins <= 0) return 0;
+  if (mins <= 19) return 0;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  let roundedRem = 0;
+  if (rem <= 19) roundedRem = 0;
+  else if (rem <= 44) roundedRem = 30;
+  else roundedRem = 60;
+  return hours * 60 + roundedRem;
+}
+
+function getWorkedMinutes(entries) {
+  return (entries || []).reduce((sum, e) => {
+    if (!e.clock_in || !e.clock_out) return sum;
+    const start = new Date(e.clock_in).getTime();
+    const end = new Date(e.clock_out).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return sum;
+    const gross = Math.round((end - start) / 60000);
+    const breakMins = Math.max(0, Number(e.break_minutes || 0));
+    return sum + Math.max(0, gross - breakMins);
+  }, 0);
+}
+
+// ── Grouping ──────────────────────────────────────────────────────────────────
+
+function groupByPayPeriod({ shifts, paymentFrequency }) {
   const now = new Date();
   const grouped = new Map();
 
+  // Always include the current period even if empty
   const seed = getPeriodForDate({ date: now, paymentFrequency });
-  grouped.set(seed.key, { ...seed, timesheets: [] });
+  grouped.set(seed.key, { ...seed, shifts: [] });
 
-  for (const ts of timesheets) {
-    const date = pickTimesheetDate(ts);
+  for (const shift of shifts) {
+    const date = pickShiftDate(shift);
     if (!date) continue;
     const p = getPeriodForDate({ date, paymentFrequency });
-    if (!grouped.has(p.key)) grouped.set(p.key, { ...p, timesheets: [] });
-    grouped.get(p.key).timesheets.push(ts);
+    if (!grouped.has(p.key)) grouped.set(p.key, { ...p, shifts: [] });
+    grouped.get(p.key).shifts.push(shift);
   }
 
+  // Sort most-recent first
   return [...grouped.values()].sort((a, b) => b.from.getTime() - a.from.getTime());
+}
+
+function pickShiftDate(shift) {
+  const d = shift?.shift_date;
+  if (d && String(d).length >= 10) {
+    const [y, m, day] = String(d).split("-").map(Number);
+    if (y && m && day) return new Date(y, m - 1, day);
+  }
+  return null;
 }
 
 function getPeriodForDate({ date, paymentFrequency }) {
@@ -214,6 +324,7 @@ function getPeriodForDate({ date, paymentFrequency }) {
     return makePeriod({ from, to, freq });
   }
 
+  // FORTNIGHTLY — anchor to 2024-01-01 (Monday)
   const weekStart = startOfWeek(d);
   const anchor = new Date(2024, 0, 1);
   anchor.setHours(0, 0, 0, 0);
@@ -226,69 +337,87 @@ function getPeriodForDate({ date, paymentFrequency }) {
 
 function makePeriod({ from, to, freq }) {
   const key = `${isoDate(from)}_${freq}`;
-  const label = `${freq.charAt(0)}${freq.slice(1).toLowerCase()} period • ${isoDate(from)} → ${isoDate(to)}`;
+  const label = `${freq.charAt(0)}${freq.slice(1).toLowerCase()} period · ${isoDate(from)} → ${isoDate(to)}`;
   return { key, from, to, label };
 }
 
-function pickTimesheetDate(ts) {
-  const shiftDate = ts?.shift?.shift_date;
-  if (shiftDate && String(shiftDate).length >= 10) {
-    const [y, m, d] = String(shiftDate).split("-").map(Number);
-    if (y && m && d) return new Date(y, m - 1, d);
-  }
+// ── CSV export ────────────────────────────────────────────────────────────────
 
-  if (ts?.created_at) {
-    const c = new Date(ts.created_at);
-    if (Number.isFinite(c.getTime())) return c;
-  }
-
-  return null;
-}
-
-function getTimesheetWorkedMinutes(ts) {
-  const entries = ts?.entries || [];
-  return entries.reduce((sum, e) => {
-    if (!e.clock_in || !e.clock_out) return sum;
-    const start = new Date(e.clock_in).getTime();
-    const end = new Date(e.clock_out).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return sum;
-    const gross = Math.round((end - start) / 60000);
-    const breakMinutes = Math.max(0, Number(e.break_minutes || 0));
-    return sum + Math.max(0, gross - breakMinutes);
-  }, 0);
-}
-
-function toCsv(group) {
+function toCsv(group, timesheetMap) {
   const header = [
-    "timesheet_id",
-    "status",
     "shift_title",
     "shift_date",
     "start_at",
     "end_at",
     "location",
-    "worked_minutes",
-    "submitted_at",
+    "status",
+    "scheduled_minutes",
+    "scheduled_pay",
+    "clocked_minutes",
+    "timesheet_status",
   ];
 
-  const rows = group.timesheets.map((ts) => {
-    const shift = ts.shift || {};
+  const rows = group.shifts.map(s => {
+    const ts = timesheetMap.get(s.id);
+    const entries = ts?.entries || [];
     return [
-      ts.id,
-      String(ts.status || "OPEN"),
-      shift.title || "",
-      shift.shift_date || "",
-      shift.start_at || "",
-      shift.end_at || "",
-      shift.location || "",
-      String(getTimesheetWorkedMinutes(ts)),
-      ts.submitted_at || "",
+      s.title || "",
+      s.shift_date || "",
+      (s.start_at || "").slice(0, 5),
+      (s.end_at || "").slice(0, 5),
+      s.location || "",
+      s.status || "PUBLISHED",
+      String(calcScheduledMinutes(s)),
+      calcScheduledPay(s).toFixed(2),
+      String(getWorkedMinutes(entries)),
+      ts?.status || "NO_TIMESHEET",
     ];
   });
 
-  return [header, ...rows]
-    .map((cols) => cols.map(csvEscape).join(","))
-    .join("\n");
+  return [header, ...rows].map(cols => cols.map(csvEscape).join(",")).join("\n");
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function startOfWeek(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = x.getDay();
+  const diff = (day + 6) % 7; // Mon = 0
+  x.setDate(x.getDate() - diff);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateDDMMYYYY(yyyyMmDd) {
+  if (!yyyyMmDd) return "";
+  const [y, m, d] = String(yyyyMmDd).split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function formatMinutes(totalMins) {
+  const mins = Math.max(0, Number(totalMins || 0));
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function fmtMoney(n) {
+  return `$${Number(n || 0).toFixed(2)}`;
+}
+
+function renderStatusBadge(status) {
+  const s = String(status || "PUBLISHED").toUpperCase();
+  const map = {
+    PUBLISHED: { cls: "wl-badge--active",    label: "Active" },
+    ACTIVE:    { cls: "wl-badge--active",    label: "Active" },
+    CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
+    DRAFT:     { cls: "wl-badge--draft",     label: "Draft" },
+    OFFERED:   { cls: "wl-badge--offered",   label: "Offered" },
+  };
+  const v = map[s] || { cls: "", label: s };
+  return `<span class="wl-badge ${v.cls}">${escapeHtml(v.label)}</span>`;
 }
 
 function csvEscape(value) {
@@ -307,46 +436,6 @@ function downloadCsv({ filename, csv }) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function renderStatusBadge(status) {
-  const s = String(status || "OPEN").toUpperCase();
-  const cls =
-    s === "APPROVED"
-      ? "wl-badge--active"
-      : s === "REJECTED"
-      ? "wl-badge--cancelled"
-      : s === "SUBMITTED"
-      ? "wl-badge--offered"
-      : "wl-badge--draft";
-
-  return `<span class="wl-badge ${cls}">${escapeHtml(s)}</span>`;
-}
-
-function startOfWeek(d) {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = x.getDay();
-  const diff = (day + 6) % 7;
-  x.setDate(x.getDate() - diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function isoDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatMinutes(totalMins) {
-  const mins = Math.max(0, Number(totalMins || 0));
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
-function fmtMoney(n) {
-  const x = Number(n || 0);
-  return `$${x.toFixed(2)}`;
 }
 
 function escapeHtml(str) {
