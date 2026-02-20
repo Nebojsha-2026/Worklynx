@@ -78,7 +78,7 @@ try {
   const allTimeTotal = nonCancelledShifts.reduce((sum, s) => sum + calcScheduledPay(s), 0);
   allTimeEarningsEl.textContent = fmtMoney(allTimeTotal);
 
-  renderShiftPeriods({ shifts, timesheetMap, paymentFrequency });
+  renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency });
 } catch (err) {
   console.error(err);
   periodListEl.innerHTML = `<div class="wl-alert wl-alert--error">${escapeHtml(err.message || "Failed to load timesheets.")}</div>`;
@@ -131,14 +131,24 @@ async function loadTimesheetMap({ userId, shiftIds }) {
   return map;
 }
 
-// ── Group shifts by pay period and render
-function renderShiftPeriods({ shifts, timesheetMap, paymentFrequency }) {
-  if (!shifts.length) {
-    periodListEl.innerHTML = `<div class="wl-alert">No assigned shifts found.</div>`;
+// ── Render only the current pay period
+function renderCurrentPeriod({ shifts, timesheetMap, paymentFrequency }) {
+  const now = new Date();
+  const currentPeriod = getPeriodForDate({ date: now, paymentFrequency });
+
+  // Filter to only shifts that fall within the current pay period
+  const currentShifts = shifts.filter(s => {
+    const d = pickShiftDate(s);
+    if (!d) return false;
+    return d >= currentPeriod.from && d <= currentPeriod.to;
+  });
+
+  if (!currentShifts.length) {
+    periodListEl.innerHTML = `<div class="wl-alert">No shifts scheduled for the current pay period (${escapeHtml(currentPeriod.label)}).</div>`;
     return;
   }
 
-  const groups = groupByPayPeriod({ shifts, paymentFrequency });
+  const groups = [{ ...currentPeriod, shifts: currentShifts }];
 
   periodListEl.innerHTML = groups
     .map(group => {
@@ -179,6 +189,22 @@ function renderShiftPeriods({ shifts, timesheetMap, paymentFrequency }) {
       downloadCsv({ filename: `${id}.csv`, csv: src.value });
     });
   });
+}
+
+// ── (kept for potential future use)
+function groupByPayPeriod({ shifts, paymentFrequency }) {
+  const now = new Date();
+  const grouped = new Map();
+  const seed = getPeriodForDate({ date: now, paymentFrequency });
+  grouped.set(seed.key, { ...seed, shifts: [] });
+  for (const shift of shifts) {
+    const date = pickShiftDate(shift);
+    if (!date) continue;
+    const p = getPeriodForDate({ date, paymentFrequency });
+    if (!grouped.has(p.key)) grouped.set(p.key, { ...p, shifts: [] });
+    grouped.get(p.key).shifts.push(shift);
+  }
+  return [...grouped.values()].sort((a, b) => b.from.getTime() - a.from.getTime());
 }
 
 function renderShiftRow(shift, timesheet) {
