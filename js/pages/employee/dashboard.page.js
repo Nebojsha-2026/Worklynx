@@ -89,7 +89,7 @@ content.innerHTML = `
 
       <div class="wl-card wl-panel">
         <h2 class="employee-section-title">Recent earnings</h2>
-        <p class="employee-section-subtitle">Posted after clock-out or shift end</p>
+        <p class="employee-section-subtitle">Based on scheduled hours</p>
         <div class="employee-list" id="earningsBox">
           <div style="opacity:.6; font-size:13px;">Loading…</div>
         </div>
@@ -100,9 +100,9 @@ content.innerHTML = `
 `;
 
 // Element refs
-const todaySubEl    = document.querySelector("#todaySub");
-const todayPillEl   = document.querySelector("#todayPill");
-const todayBodyEl   = document.querySelector("#todayBody");
+const todaySubEl     = document.querySelector("#todaySub");
+const todayPillEl    = document.querySelector("#todayPill");
+const todayBodyEl    = document.querySelector("#todayBody");
 const upcomingListEl = document.querySelector("#upcomingList");
 const earningsBoxEl  = document.querySelector("#earningsBox");
 const cardPeriodEl   = document.querySelector("#cardPeriod");
@@ -150,8 +150,13 @@ async function loadUpcomingAssignedShifts({ days }) {
     .from("shifts").select("*").in("id", ids).limit(500);
   if (error) throw error;
 
+  // Upcoming = not cancelled, starts within the window
   return (shifts || [])
-    .filter((s) => { const ms = shiftStartMs(s); return Number.isFinite(ms) && ms >= dayStart && ms <= end.getTime(); })
+    .filter((s) => {
+      if (String(s.status || "").toUpperCase() === "CANCELLED") return false;
+      const ms = shiftStartMs(s);
+      return Number.isFinite(ms) && ms >= dayStart && ms <= end.getTime();
+    })
     .sort((a, b) => shiftStartMs(a) - shiftStartMs(b));
 }
 
@@ -270,15 +275,24 @@ function renderUpcoming(shifts) {
   }
 }
 
+/**
+ * Earnings: calculated from shift assignments (ALL statuses including CANCELLED).
+ * Uses scheduled hours × hourly_rate as the source of truth.
+ * Falls back gracefully if the earnings ledger table exists and has records.
+ */
 async function renderEarnings({ userId, paymentFrequency }) {
   const now    = new Date();
   const period = getCurrentPayPeriod({ now, paymentFrequency });
 
-  const [periodTotal, allTimeTotal, recent] = await Promise.all([
-    sumLedger({ userId, from: period.from, to: now }),
-    sumLedger({ userId, from: null, to: null }),
-    fetchRecentLedger({ userId, limit: 5 }),
-  ]);
+  // Load all assigned shifts (including cancelled) to compute earnings
+  const allShiftEarnings = await loadAllShiftEarnings({ userId });
+
+  const periodTotal  = sumEarningsInRange(allShiftEarnings, period.from, now);
+  const allTimeTotal = sumEarningsInRange(allShiftEarnings, null, null);
+  const recent       = allShiftEarnings
+    .filter((r) => r.earnedAt != null)
+    .sort((a, b) => b.earnedAt - a.earnedAt)
+    .slice(0, 5);
 
   periodLabelEl.textContent = period.metricLabel;
   periodHintEl.textContent  = period.rangeLabel;
@@ -286,57 +300,116 @@ async function renderEarnings({ userId, paymentFrequency }) {
   cardAllTimeEl.textContent = fmtMoney(allTimeTotal);
 
   if (!recent.length) {
-    earningsBoxEl.innerHTML = `<div class="wl-alert">No earnings posted yet.</div>`;
+    earningsBoxEl.innerHTML = `<div class="wl-alert">No earnings yet — complete a shift to see them here.</div>`;
     return;
   }
 
   earningsBoxEl.innerHTML = recent.map((r) => {
-    const s    = r.shift || {};
-    const when = s.shift_date ? formatWhenLabel(s.shift_date) : "";
-    const time = s.start_at && s.end_at
-      ? `${String(s.start_at).slice(0, 5)} → ${String(s.end_at).slice(0, 5)}`
+    const when = r.shiftDate ? formatWhenLabel(r.shiftDate) : "";
+    const time = r.startAt && r.endAt
+      ? `${String(r.startAt).slice(0, 5)} → ${String(r.endAt).slice(0, 5)}`
       : "";
-    const isClocked = r.source !== "SCHEDULED";
     return `
       <div class="wl-card employee-earning-card">
         <div class="employee-shift-card__row">
           <div style="min-width:0; flex:1;">
-            <div class="employee-shift-card__title">${escapeHtml(s.title || "Shift")}</div>
+            <div class="employee-shift-card__title">${escapeHtml(r.title || "Shift")}</div>
             <div class="employee-shift-card__meta">
               ${when ? `<strong>${escapeHtml(when)}</strong> · ` : ""}${escapeHtml(time)}
             </div>
           </div>
           <div class="employee-shift-card__actions">
-            <span class="wl-badge ${isClocked ? "wl-badge--offered" : "wl-badge--draft"}">
-              ${isClocked ? "Clocked" : "Scheduled"}
-            </span>
-            <strong style="font-size:15px;">${escapeHtml(fmtMoney(Number(r.amount || 0)))}</strong>
+            <span class="wl-badge wl-badge--draft">Scheduled</span>
+            <strong style="font-size:15px;">${escapeHtml(fmtMoney(r.amount))}</strong>
           </div>
         </div>
       </div>`;
   }).join("");
 }
 
-/* ── Data helpers ─────────────────────────────────────────── */
+/* ── Earnings calculation helpers ─────────────────────────── */
 
-async function sumLedger({ userId, from, to }) {
-  let q = supabase.from("earnings").select("amount").eq("employee_user_id", userId).limit(1000);
-  if (from) q = q.gte("earned_at", from.toISOString());
-  if (to)   q = q.lte("earned_at", to.toISOString());
-  const { data, error } = await q;
+/**
+ * Load ALL assigned shifts (including CANCELLED) and compute scheduled earnings.
+ * Returns array of { title, shiftDate, startAt, endAt, status, amount, earnedAt }.
+ */
+async function loadAllShiftEarnings({ userId }) {
+  const assigns = await listMyShiftAssignments();
+  const ids = (assigns || []).map((a) => a.shift_id).filter(Boolean);
+  if (!ids.length) return [];
+
+  const { data: shifts, error } = await supabase
+    .from("shifts")
+    .select("id, title, shift_date, end_date, start_at, end_at, break_minutes, break_is_paid, hourly_rate, status")
+    .in("id", ids)
+    .limit(1000);
+
   if (error) throw error;
-  return (data || []).reduce((acc, r) => acc + Number(r.amount || 0), 0);
+
+  return (shifts || [])
+    .filter((s) => String(s.status || "").toUpperCase() !== "CANCELLED")
+    .map((s) => {
+    const amount = calcScheduledPay(s);
+    const shiftDateMs = s.shift_date ? new Date(s.shift_date + "T00:00:00").getTime() : null;
+    return {
+      shiftId:   s.id,
+      title:     s.title || "Untitled shift",
+      shiftDate: s.shift_date,
+      startAt:   s.start_at,
+      endAt:     s.end_at,
+      status:    s.status,
+      amount,
+      earnedAt:  shiftDateMs,
+    };
+  });
 }
 
-async function fetchRecentLedger({ userId, limit }) {
-  const { data, error } = await supabase
-    .from("earnings")
-    .select("id, amount, source, earned_at, shift:shifts(title, shift_date, start_at, end_at)")
-    .eq("employee_user_id", userId)
-    .order("earned_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data || [];
+/**
+ * Sum earnings within an optional date range.
+ * from/to are Date objects (or null for all-time).
+ */
+function sumEarningsInRange(records, from, to) {
+  return records.reduce((acc, r) => {
+    if (r.earnedAt == null) return acc;
+    if (from && r.earnedAt < from.getTime()) return acc;
+    if (to   && r.earnedAt > to.getTime())   return acc;
+    return acc + r.amount;
+  }, 0);
+}
+
+/**
+ * Calculate scheduled pay for a shift based on duration × hourly rate.
+ * Accounts for break (paid vs unpaid) and uses the same rounding as shift.page.js.
+ */
+function calcScheduledPay(shift) {
+  if (!shift.hourly_rate || !shift.shift_date || !shift.start_at || !shift.end_at) return 0;
+
+  const startDate = shift.shift_date;
+  const endDate   = shift.end_date || shift.shift_date;
+  const startMs   = new Date(`${startDate}T${shift.start_at}`).getTime();
+  const endMs     = new Date(`${endDate}T${shift.end_at}`).getTime();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
+
+  const totalMins   = Math.max(1, Math.round((endMs - startMs) / 60000));
+  const breakMins   = Math.max(0, Number(shift.break_minutes || 0));
+  const paidMinsRaw = shift.break_is_paid ? totalMins : Math.max(0, totalMins - breakMins);
+  const paidMins    = roundForPay(paidMinsRaw);
+
+  return (paidMins / 60) * Number(shift.hourly_rate);
+}
+
+/** Same rounding rule as employee/shift.page.js */
+function roundForPay(mins) {
+  if (!mins || mins <= 0) return 0;
+  if (mins <= 19) return 0;
+  const hours = Math.floor(mins / 60);
+  const rem   = mins % 60;
+  let roundedRem = 0;
+  if      (rem <= 19) roundedRem = 0;
+  else if (rem <= 44) roundedRem = 30;
+  else                roundedRem = 60;
+  return hours * 60 + roundedRem;
 }
 
 /* ── Utilities ────────────────────────────────────────────── */
