@@ -352,7 +352,8 @@ function getPeriodForDate({ date, paymentFrequency }) {
 
 function makePeriod({ from, to, freq }) {
   const key = `${isoDate(from)}_${freq}`;
-  const label = `${freq.charAt(0)}${freq.slice(1).toLowerCase()} period · ${isoDate(from)} → ${isoDate(to)}`;
+  const freqLabel = freq.charAt(0) + freq.slice(1).toLowerCase();
+  const label = `${freqLabel} period · ${ddmmyyyy(from)} → ${ddmmyyyy(to)}`;
   return { key, from, to, label };
 }
 
@@ -426,6 +427,10 @@ function startOfWeek(d) {
 
 function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function ddmmyyyy(d) {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 function formatDateDDMMYYYY(yyyyMmDd) {
