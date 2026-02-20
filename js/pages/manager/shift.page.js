@@ -13,10 +13,15 @@ import {
 } from "../../data/assignments.api.js";
 import { listOrgMembers } from "../../data/members.api.js";
 import { listAssignmentsForShifts } from "../../data/shiftAssignments.api.js";
+import {
+  notifyShiftAssigned,
+  notifyShiftCancelled,
+  notifyShiftUpdated,
+} from "../../data/notifications.api.js";
 
 await requireRole(["BO", "BM", "MANAGER"]);
 
-const params = new URLSearchParams(window.location.search);
+const params  = new URLSearchParams(window.location.search);
 const shiftId = params.get("id");
 
 if (!shiftId) {
@@ -24,7 +29,7 @@ if (!shiftId) {
   throw new Error("Missing shift id");
 }
 
-const org = await loadOrgContext();
+const org      = await loadOrgContext();
 const supabase = getSupabase();
 
 document.body.prepend(
@@ -62,13 +67,13 @@ function isoToday() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const today = isoToday();
-const isPast = shift.shift_date < today;
+const today       = isoToday();
+const isPast      = shift.shift_date < today;
 const isCancelled = String(shift.status || "").toUpperCase() === "CANCELLED";
-const canEdit = !isPast && !isCancelled;
+const canEdit     = !isPast && !isCancelled;
 
 // ── Load employees + assignments ───────────────────────────────────────────
-let employees = [];
+let employees        = [];
 let employeesLoadError = null;
 
 try {
@@ -100,8 +105,8 @@ try {
 // ── Build time options ─────────────────────────────────────────────────────
 function buildTimeOptions(selected = "") {
   return Array.from({ length: 48 }, (_, i) => {
-    const h = Math.floor(i / 2);
-    const m = i % 2 === 0 ? "00" : "30";
+    const h   = Math.floor(i / 2);
+    const m   = i % 2 === 0 ? "00" : "30";
     const val = `${String(h).padStart(2, "0")}:${m}:00`;
     return `<option value="${val}" ${selected && selected.slice(0, 5) === val.slice(0, 5) ? "selected" : ""}>${val.slice(0, 5)}</option>`;
   }).join("");
@@ -159,7 +164,7 @@ content.innerHTML = `
         <div>
           <label>Time tracking</label>
           <select id="editTrackTime">
-            <option value="true" ${shift.track_time !== false ? "selected" : ""}>Track time (clock in/out)</option>
+            <option value="true"  ${shift.track_time !== false ? "selected" : ""}>Track time (clock in/out)</option>
             <option value="false" ${shift.track_time === false ? "selected" : ""}>No tracking required</option>
           </select>
         </div>
@@ -191,8 +196,8 @@ content.innerHTML = `
         <div>
           <label>Break mode</label>
           <select id="editBreakMode">
-            <option value="NONE" ${!shift.break_minutes ? "selected" : ""}>No break</option>
-            <option value="PAID" ${shift.break_minutes && shift.break_is_paid ? "selected" : ""}>Paid break</option>
+            <option value="NONE"   ${!shift.break_minutes ? "selected" : ""}>No break</option>
+            <option value="PAID"   ${shift.break_minutes &&  shift.break_is_paid ? "selected" : ""}>Paid break</option>
             <option value="UNPAID" ${shift.break_minutes && !shift.break_is_paid ? "selected" : ""}>Unpaid break</option>
           </select>
         </div>
@@ -262,7 +267,10 @@ content.innerHTML = `
 
   <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
     <a class="wl-btn" href="${path("/app/manager/shifts.html")}">← Back</a>
-    ${!isCancelled ? `<button id="cancelBtn" class="wl-btn" type="button" ${isPast ? "disabled title='Cannot cancel past shifts'" : ""}>Cancel shift</button>` : `<button class="wl-btn" disabled>Cancelled</button>`}
+    ${!isCancelled
+      ? `<button id="cancelBtn" class="wl-btn" type="button" ${isPast ? "disabled title='Cannot cancel past shifts'" : ""}>Cancel shift</button>`
+      : `<button class="wl-btn" disabled>Cancelled</button>`
+    }
   </div>
   <div id="actionMsg" style="margin-top:10px;"></div>
 `;
@@ -275,8 +283,8 @@ const editCancelBtn = document.querySelector("#editCancelBtn");
 if (editToggleBtn && editSection) {
   editToggleBtn.addEventListener("click", () => {
     const open = editSection.style.display !== "none";
-    editSection.style.display = open ? "none" : "block";
-    editToggleBtn.textContent = open ? "✏️ Edit shift" : "✖ Close editor";
+    editSection.style.display  = open ? "none" : "block";
+    editToggleBtn.textContent  = open ? "✏️ Edit shift" : "✖ Close editor";
     if (!open) editSection.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
@@ -336,13 +344,13 @@ if (editForm) {
 
     const saveBtn = document.querySelector("#editSaveBtn");
     try {
-      saveBtn.disabled = true;
+      saveBtn.disabled    = true;
       saveBtn.textContent = "Saving…";
 
       const patch = {
         title:         newTitle,
         description:   newDescription || null,
-        location:      newLocation || null,
+        location:      newLocation    || null,
         hourly_rate:   newRate,
         track_time:    newTrackTime,
         shift_date:    newStartDate,
@@ -362,25 +370,35 @@ if (editForm) {
 
       if (updateErr) throw updateErr;
 
+      // ── Notify assigned employees that the shift was updated ──────────────
+      for (const empId of assignedIds) {
+        notifyShiftUpdated({
+          employeeUserId: empId,
+          orgId:          org.id,
+          shiftTitle:     updated.title,
+          shiftDate:      updated.shift_date,
+          shiftId,
+        }).catch(console.warn);
+      }
+
       // Update detail section display
-      document.querySelector("#shiftTitleDisplay").textContent = updated.title || "";
-      const detailDate = document.querySelector("#detailDate");
-      const detailTime = document.querySelector("#detailTime");
-      const detailBreak = document.querySelector("#detailBreak");
+      const detailDate     = document.querySelector("#detailDate");
+      const detailTime     = document.querySelector("#detailTime");
+      const detailBreak    = document.querySelector("#detailBreak");
       const detailTracking = document.querySelector("#detailTracking");
       const detailLocation = document.querySelector("#detailLocation");
-      const detailRate = document.querySelector("#detailRate");
-      const detailDesc = document.querySelector("#detailDescription");
+      const detailRate     = document.querySelector("#detailRate");
+      const detailDesc     = document.querySelector("#detailDescription");
 
-      if (detailDate)     detailDate.textContent = updated.shift_date || "";
-      if (detailTime)     detailTime.textContent = `${(updated.start_at || "").slice(0,5)} → ${(updated.end_at || "").slice(0,5)}`;
-      if (detailBreak)    detailBreak.textContent = updated.break_minutes
-        ? `${updated.break_minutes}min (${updated.break_is_paid ? "paid" : "unpaid"})`
-        : "None";
+      document.querySelector("#shiftTitleDisplay").textContent = updated.title || "";
+      if (detailDate)     detailDate.textContent     = updated.shift_date || "";
+      if (detailTime)     detailTime.textContent     = `${(updated.start_at || "").slice(0,5)} → ${(updated.end_at || "").slice(0,5)}`;
+      if (detailBreak)    detailBreak.textContent    = updated.break_minutes
+        ? `${updated.break_minutes}min (${updated.break_is_paid ? "paid" : "unpaid"})` : "None";
       if (detailTracking) detailTracking.textContent = updated.track_time !== false ? "Required" : "Not required";
       if (detailLocation) detailLocation.textContent = updated.location || "";
-      if (detailRate)     detailRate.textContent = `$${updated.hourly_rate}`;
-      if (detailDesc)     detailDesc.textContent = updated.description || "";
+      if (detailRate)     detailRate.textContent     = `$${updated.hourly_rate}`;
+      if (detailDesc)     detailDesc.textContent     = updated.description || "";
 
       editMsg.innerHTML = `<div class="wl-alert wl-alert--success">Shift updated ✅</div>`;
       if (editToggleBtn) editToggleBtn.textContent = "✏️ Edit shift";
@@ -390,7 +408,7 @@ if (editForm) {
       console.error(err);
       showEditErr(err?.message || "Failed to save changes.");
     } finally {
-      saveBtn.disabled = false;
+      saveBtn.disabled    = false;
       saveBtn.textContent = "Save changes";
     }
   });
@@ -423,6 +441,14 @@ if (assignedBlock) {
       btn.disabled = true;
 
       await unassignShiftFromEmployee({ shiftId, employeeUserId });
+
+      // ── Notify employee their shift was cancelled (unassigned) ────────────
+      notifyShiftCancelled({
+        employeeUserId,
+        orgId:      org.id,
+        shiftTitle: shift.title,
+        shiftDate:  shift.shift_date,
+      }).catch(console.warn);
 
       assignedIds = assignedIds.filter((id) => id !== employeeUserId);
       assignedBlock.innerHTML = renderAssignedTable(assignedIds, labelById);
@@ -459,6 +485,15 @@ if (assignForm && employeeSelect && assignMsg) {
 
       await assignShiftToEmployee({ shiftId, employeeUserId });
 
+      // ── Notify employee they've been assigned ─────────────────────────────
+      notifyShiftAssigned({
+        employeeUserId,
+        orgId:      org.id,
+        shiftTitle: shift.title,
+        shiftDate:  shift.shift_date,
+        shiftId,
+      }).catch(console.warn);
+
       assignedIds.push(employeeUserId);
       assignedBlock.innerHTML = renderAssignedTable(assignedIds, labelById);
       if (assignCountEl) assignCountEl.textContent = assignedIds.length;
@@ -484,15 +519,25 @@ if (cancelBtn && !isCancelled && !isPast) {
     if (!confirm("Cancel this shift? Employees will no longer be able to work it.")) return;
 
     try {
-      cancelBtn.disabled = true;
+      cancelBtn.disabled    = true;
       msgEl.innerHTML = `<div style="opacity:.85;">Cancelling…</div>`;
 
-      const updated = await cancelShift({ shiftId });
+      await cancelShift({ shiftId });
+
+      // ── Notify all assigned employees the shift is cancelled ───────────────
+      for (const empId of assignedIds) {
+        notifyShiftCancelled({
+          employeeUserId: empId,
+          orgId:          org.id,
+          shiftTitle:     shift.title,
+          shiftDate:      shift.shift_date,
+        }).catch(console.warn);
+      }
 
       msgEl.innerHTML = `<div class="wl-alert wl-alert--success">Shift cancelled.</div>`;
       cancelBtn.textContent = "Cancelled";
       if (editToggleBtn) {
-        editToggleBtn.disabled = true;
+        editToggleBtn.disabled      = true;
         editToggleBtn.style.display = "none";
       }
       if (editSection) editSection.style.display = "none";
@@ -543,13 +588,13 @@ function renderAssignedTable(ids, labelMap) {
 }
 
 function renderStatusBadge(statusRaw) {
-  const s = String(statusRaw || "PUBLISHED").toUpperCase();
+  const s   = String(statusRaw || "PUBLISHED").toUpperCase();
   const map = {
-    PUBLISHED: { cls: "wl-badge--active",    label: "Active" },
-    ACTIVE:    { cls: "wl-badge--active",    label: "Active" },
+    PUBLISHED: { cls: "wl-badge--active",    label: "Active"    },
+    ACTIVE:    { cls: "wl-badge--active",    label: "Active"    },
     CANCELLED: { cls: "wl-badge--cancelled", label: "Cancelled" },
-    DRAFT:     { cls: "wl-badge--draft",     label: "Draft" },
-    OFFERED:   { cls: "wl-badge--offered",   label: "Offered" },
+    DRAFT:     { cls: "wl-badge--draft",     label: "Draft"     },
+    OFFERED:   { cls: "wl-badge--offered",   label: "Offered"   },
   };
   const v = map[s] || { cls: "", label: s };
   return `<span class="wl-badge ${v.cls}">${escapeHtml(v.label)}</span>`;
@@ -557,9 +602,9 @@ function renderStatusBadge(statusRaw) {
 
 function escapeHtml(str) {
   return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&",  "&amp;")
+    .replaceAll("<",  "&lt;")
+    .replaceAll(">",  "&gt;")
+    .replaceAll('"',  "&quot;")
+    .replaceAll("'",  "&#039;");
 }
