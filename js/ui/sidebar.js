@@ -3,13 +3,13 @@ import { path } from "../core/config.js";
 
 const NAV = {
   BO: [
-  ["Dashboard", "/app/bo/dashboard.html"],
-  ["Managers", "/app/bo/managers.html"],
-  ["Employees", "/app/bo/employees.html"],
-  ["Reports", "/app/bo/reports.html"],
-  ["Billing", "/app/bo/billing.html"],
-  ["Settings", "/app/bo/settings.html"],
-],
+    ["Dashboard", "/app/bo/dashboard.html"],
+    ["Managers", "/app/bo/managers.html"],
+    ["Employees", "/app/bo/employees.html"],
+    ["Reports", "/app/bo/reports.html"],
+    ["Billing", "/app/bo/billing.html"],
+    ["Settings", "/app/bo/settings.html"],
+  ],
   BM: [
     ["Dashboard", "/app/bm/dashboard.html"],
     ["Shifts", "/app/bm/shifts.html"],
@@ -21,6 +21,7 @@ const NAV = {
   MANAGER: [
     ["Dashboard", "/app/manager/dashboard.html"],
     ["Shifts", "/app/manager/shifts.html"],
+    ["♻ Recurring Series", "/app/manager/recurring-series.html"], // ✅ STEP 4
     ["Create shift", "/app/manager/create-shift.html"],
     ["Team", "/app/manager/team.html"],
     ["Approvals", "/app/manager/approvals.html"],
