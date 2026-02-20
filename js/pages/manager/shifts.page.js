@@ -2,6 +2,7 @@
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
+import { tickRecurringSeries } from "../../data/recurring.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { listShifts } from "../../data/shifts.api.js";
@@ -12,6 +13,8 @@ import { path } from "../../core/config.js";
 await requireRole(["BO", "BM", "MANAGER"]);
 
 const org = await loadOrgContext();
+
+tickRecurringSeries(org.id);  // fire-and-forget — silently creates next occurrences
 
 document.body.prepend(
   renderHeader({
