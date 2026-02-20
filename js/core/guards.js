@@ -4,20 +4,48 @@ import { getSession } from "./session.js";
 import { isPlatformAdmin } from "../data/admin.api.js";
 import { getMyMemberships } from "../data/members.api.js";
 import { pickHighestRole, dashboardPathForRole } from "./roles.js";
+import { needsMfaVerification } from "./auth.js";
 
 export async function requireAuth() {
   const session = await getSession();
-  if (!session?.user) {
+  const user = session?.user;
+
+  if (!user) {
     window.location.replace(path("/login.html"));
     return null;
   }
-  return session.user;
+
+  // ── Email verification gate ───────────────────────────────────────────────
+  // Supabase sets email_confirmed_at once the user clicks the link in their inbox.
+  // Until that happens we sign them out and redirect to a friendly holding page.
+  if (!user.email_confirmed_at) {
+    const { getSupabase } = await import("./supabaseClient.js");
+    await getSupabase().auth.signOut();
+    // Pass their email so the holding page can offer a "resend" button
+    const encoded = encodeURIComponent(user.email ?? "");
+    window.location.replace(path(`/verify-email.html?email=${encoded}`));
+    return null;
+  }
+
+  // ── MFA gate ─────────────────────────────────────────────────────────────
+  // If the user has enrolled 2FA but hasn't completed it this session, send
+  // them to the MFA challenge page before they reach any protected content.
+  if (await needsMfaVerification()) {
+    window.location.replace(path("/verify-mfa.html"));
+    return null;
+  }
+
+  return user;
 }
 
 export async function redirectIfLoggedIn() {
   const session = await getSession();
   const user = session?.user;
   if (!user) return;
+
+  // Don't redirect unverified users — let them stay on login/register
+  // so they can see the "check your inbox" message.
+  if (!user.email_confirmed_at) return;
 
   const admin = await isPlatformAdmin(user.id);
   if (admin) {
@@ -63,7 +91,7 @@ export async function enforceRoleRouting() {
 
 /**
  * Require authentication and require that the user's highest role is in allowedRoles.
- * Does NOT force dashboard redirect if the role is allowed.
+ * Email verification + MFA are enforced via requireAuth().
  */
 export async function requireRole(allowedRoles = []) {
   const user = await requireAuth();
