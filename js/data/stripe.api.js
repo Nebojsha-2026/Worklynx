@@ -74,12 +74,41 @@ export function getTierDetails(tier) {
 
 export async function checkTierLimits({ orgId }) {
   const supabase = getSupabase();
+
+  // Get org's subscription tier (used as fallback if no subscriptions row yet)
   const { data: org, error: orgErr } = await supabase
     .from("organizations")
-    .select("subscription_tier, max_business_managers, max_managers, max_employees")
+    .select("subscription_tier")
     .eq("id", orgId)
     .single();
   if (orgErr) throw orgErr;
+
+  // Try to get limits from subscriptions → plans join
+  const { data: sub } = await supabase
+    .from("subscriptions")
+    .select("status, plans ( max_bo, max_bm, max_managers, max_employees )")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+
+  // Fall back: look up the plan directly by tier name
+  let planLimits = sub?.plans ?? null;
+  if (!planLimits) {
+    const tierId = org.subscription_tier || "tier_1";
+    const { data: plan } = await supabase
+      .from("plans")
+      .select("max_bo, max_bm, max_managers, max_employees")
+      .eq("id", tierId)
+      .maybeSingle();
+    planLimits = plan;
+  }
+
+  // Hard-coded tier_1 defaults if plans table is empty
+  const limits = {
+    max_bo: planLimits?.max_bo ?? 1,
+    max_bm: planLimits?.max_bm ?? 1,
+    max_managers: planLimits?.max_managers ?? 2,
+    max_employees: planLimits?.max_employees ?? 20,
+  };
 
   const { data: members, error: membersErr } = await supabase
     .from("org_members")
@@ -88,19 +117,19 @@ export async function checkTierLimits({ orgId }) {
     .eq("is_active", true);
   if (membersErr) throw membersErr;
 
-  const counts = { BM: 0, MANAGER: 0, EMPLOYEE: 0 };
+  const counts = { BO: 0, BM: 0, MANAGER: 0, EMPLOYEE: 0 };
   members.forEach((m) => { if (counts[m.role] !== undefined) counts[m.role]++; });
 
   const usage = {
-    businessManagers: { current: counts.BM, max: org.max_business_managers, available: org.max_business_managers - counts.BM },
-    managers: { current: counts.MANAGER, max: org.max_managers, available: org.max_managers - counts.MANAGER },
-    employees: { current: counts.EMPLOYEE, max: org.max_employees, available: org.max_employees - counts.EMPLOYEE },
+    businessManagers: { current: counts.BM, max: limits.max_bm, available: limits.max_bm - counts.BM },
+    managers: { current: counts.MANAGER, max: limits.max_managers, available: limits.max_managers - counts.MANAGER },
+    employees: { current: counts.EMPLOYEE, max: limits.max_employees, available: limits.max_employees - counts.EMPLOYEE },
   };
 
   return {
-    canInviteBM: counts.BM < org.max_business_managers,
-    canInviteManager: counts.MANAGER < org.max_managers,
-    canInviteEmployee: counts.EMPLOYEE < org.max_employees,
+    canInviteBM: counts.BM < limits.max_bm,
+    canInviteManager: counts.MANAGER < limits.max_managers,
+    canInviteEmployee: counts.EMPLOYEE < limits.max_employees,
     usage,
     tier: org.subscription_tier,
   };
