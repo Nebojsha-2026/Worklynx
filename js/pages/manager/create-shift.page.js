@@ -88,19 +88,33 @@ content.innerHTML = `
 
         <div id="recurringPanel" style="display:none;margin-top:16px;">
 
-          <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px;">Repeat on these days</div>
-          <div id="dayPicker" style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i) => `
-              <label class="wl-day-pill" style="
-                display:inline-flex;align-items:center;justify-content:center;
-                width:52px;height:52px;border-radius:10px;font-size:13px;font-weight:700;
-                border:1.5px solid var(--wl-border);background:var(--wl-card);
-                cursor:pointer;user-select:none;transition:.12s;color:var(--text);position:relative;">
-                <input type="checkbox" value="${i+1}" name="recurDay" style="position:absolute;opacity:0;pointer-events:none;" />
-                ${d}
-              </label>`).join("")}
+          <!-- Recurrence pattern -->
+          <div style="margin-bottom:16px;">
+            <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">How often?</label>
+            <select id="recurPattern" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--wl-border);font-size:13px;background:var(--bg);">
+              <option value="CUSTOM">Custom (pick specific days of the week)</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="FORTNIGHTLY">Fortnightly (every 2 weeks)</option>
+              <option value="MONTHLY">Monthly (same date each month)</option>
+            </select>
           </div>
-          <div id="dayPickerHint" class="wl-subtext" style="margin-top:8px;">Select at least one day.</div>
+
+          <!-- Custom day picker – hidden for WEEKLY / FORTNIGHTLY / MONTHLY -->
+          <div id="customDayPanel">
+            <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px;">Repeat on these days</div>
+            <div id="dayPicker" style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i) => `
+                <label class="wl-day-pill" style="
+                  display:inline-flex;align-items:center;justify-content:center;
+                  width:52px;height:52px;border-radius:10px;font-size:13px;font-weight:700;
+                  border:1.5px solid var(--wl-border);background:var(--wl-card);
+                  cursor:pointer;user-select:none;transition:.12s;color:var(--text);position:relative;">
+                  <input type="checkbox" value="${i+1}" name="recurDay" style="position:absolute;opacity:0;pointer-events:none;" />
+                  ${d}
+                </label>`).join("")}
+            </div>
+            <div id="dayPickerHint" class="wl-subtext" style="margin-top:8px;">Select at least one day.</div>
+          </div>
 
           <div class="wl-form__row" style="margin-top:14px;">
             <div>
@@ -192,6 +206,8 @@ const recurPreviewEl     = content.querySelector("#recurPreview");
 const dayPickerHintEl    = content.querySelector("#dayPickerHint");
 const ongoingBannerEl    = content.querySelector("#ongoingBanner");
 const dayPills           = content.querySelectorAll(".wl-day-pill");
+const recurPatternEl     = content.querySelector("#recurPattern");
+const customDayPanelEl   = content.querySelector("#customDayPanel");
 
 /* ── Time dropdowns ───────────────────────────────────────── */
 function buildTimes() {
@@ -223,6 +239,13 @@ dayPills.forEach(pill => {
 function selectedDays() {
   return [...content.querySelectorAll("input[name=recurDay]:checked")].map(cb => Number(cb.value));
 }
+function getRecurPattern() { return recurPatternEl?.value || "CUSTOM"; }
+
+recurPatternEl.addEventListener("change", () => {
+  const isCustom = getRecurPattern() === "CUSTOM";
+  customDayPanelEl.style.display = isCustom ? "block" : "none";
+  updatePreview(); updateHint();
+});
 
 /* ── Toggle recurring ─────────────────────────────────────── */
 isRecurringEl.addEventListener("change", () => {
@@ -271,19 +294,23 @@ function updateHint() {
   const ongoingSuffix = (isRecurringEl.checked && !recurEndEl.value)
     ? " · next shift auto-created 24h before start" : "";
   const label = isRecurringEl.checked ? "Each shift" : "Duration";
-  hintEl.textContent = `${label}: ${Math.floor(m/60)}h ${m%60}m · ${bText} · ${track}${ongoingSuffix}`;
+  const patternLabels = { WEEKLY: "Weekly", FORTNIGHTLY: "Fortnightly", MONTHLY: "Monthly", CUSTOM: "Custom" };
+  const patternPrefix = isRecurringEl.checked ? `${patternLabels[getRecurPattern()] || "Recurring"} · ` : "";
+  hintEl.textContent = `${patternPrefix}${label}: ${Math.floor(m/60)}h ${m%60}m · ${bText} · ${track}${ongoingSuffix}`;
 }
 updateHint();
 
 /* ── Recurring preview ────────────────────────────────────── */
 function updatePreview() {
   if (!isRecurringEl.checked) { recurPreviewEl.style.display = "none"; return; }
-  const days    = selectedDays();
-  const fromStr = recurStartEl.value;
-  const toStr   = recurEndEl.value;
-  const ongoing = !toStr;
+  const pattern  = getRecurPattern();
+  const isCustom = pattern === "CUSTOM";
+  const days     = selectedDays();
+  const fromStr  = recurStartEl.value;
+  const toStr    = recurEndEl.value;
+  const ongoing  = !toStr;
 
-  if (!days.length) {
+  if (isCustom && !days.length) {
     dayPickerHintEl.textContent = "Select at least one day.";
     recurPreviewEl.style.display = "none";
     updateOngoingBanner();
@@ -293,34 +320,39 @@ function updatePreview() {
   updateOngoingBanner();
   if (!fromStr) { recurPreviewEl.style.display = "none"; return; }
 
+  // Generate occurrences for the preview
+  let occ;
+  if (isCustom) {
+    occ = genOccurrences(days, fromStr, ongoing ? null : toStr, ongoing ? 1 : 500);
+  } else if (pattern === "MONTHLY") {
+    occ = genMonthlyOccurrences(fromStr, ongoing ? null : toStr, ongoing ? 1 : 500);
+  } else {
+    const intervalDays = pattern === "WEEKLY" ? 7 : 14;
+    occ = genIntervalOccurrences(fromStr, ongoing ? null : toStr, intervalDays, ongoing ? 1 : 500);
+  }
+
+  if (!occ.length) {
+    recurPreviewEl.style.display = "block";
+    recurPreviewEl.className = "wl-alert wl-alert--error";
+    recurPreviewEl.innerHTML = isCustom
+      ? "No matching date found — try adjusting the start date or selected days."
+      : "No occurrences found — check dates.";
+    return;
+  }
+
   if (ongoing) {
-    // Just show the first date that matches
-    const first = genOccurrences(days, fromStr, null, 1);
-    if (!first.length) {
-      recurPreviewEl.style.display = "block";
-      recurPreviewEl.className = "wl-alert wl-alert--error";
-      recurPreviewEl.innerHTML = "No matching date found — try adjusting the start date or selected days.";
-      return;
-    }
     recurPreviewEl.style.display = "block";
     recurPreviewEl.className = "wl-alert";
     recurPreviewEl.innerHTML = `
       <div style="font-size:14px;font-weight:700;margin-bottom:8px;">♻ First occurrence to be created</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-        <span class="wl-badge wl-badge--active">${escapeHtml(first[0])}</span>
+        <span class="wl-badge wl-badge--active">${escapeHtml(occ[0])}</span>
         <span class="wl-subtext">then auto-generated 24h before each subsequent shift</span>
       </div>`;
     return;
   }
 
   // Fixed end date — show all
-  const occ     = genOccurrences(days, fromStr, toStr, 500);
-  if (!occ.length) {
-    recurPreviewEl.style.display = "block";
-    recurPreviewEl.className = "wl-alert wl-alert--error";
-    recurPreviewEl.innerHTML = "No occurrences found — check dates and selected days.";
-    return;
-  }
   const show = occ.slice(0, 5), rest = occ.length - show.length;
   recurPreviewEl.style.display = "block";
   recurPreviewEl.className = "wl-alert";
@@ -332,8 +364,10 @@ function updatePreview() {
     </div>`;
 }
 
-/* ── Occurrence generator ─────────────────────────────────── */
+/* ── Occurrence generators ────────────────────────────────── */
 function isoWeekDay(date) { const d = date.getDay(); return d === 0 ? 7 : d; }
+
+// CUSTOM: iterate day-by-day, pick dates matching the selected weekdays
 function genOccurrences(days, fromStr, toStr, limit) {
   const daySet  = new Set(days);
   const from    = parseLocalDate(fromStr);
@@ -343,6 +377,36 @@ function genOccurrences(days, fromStr, toStr, limit) {
   while (cursor <= to && results.length < limit) {
     if (daySet.has(isoWeekDay(cursor))) results.push(isoDateOf(cursor));
     cursor.setDate(cursor.getDate() + 1);
+  }
+  return results;
+}
+
+// WEEKLY / FORTNIGHTLY: fixed interval in days from fromStr
+function genIntervalOccurrences(fromStr, toStr, intervalDays, limit) {
+  const cursor = parseLocalDate(fromStr);
+  const to     = toStr ? parseLocalDate(toStr) : null;
+  const results = [];
+  while (results.length < limit && (!to || cursor <= to)) {
+    results.push(isoDateOf(cursor));
+    cursor.setDate(cursor.getDate() + intervalDays);
+  }
+  return results;
+}
+
+// MONTHLY: same calendar date each month, clamped to last day of the month
+function genMonthlyOccurrences(fromStr, toStr, limit) {
+  const from    = parseLocalDate(fromStr);
+  const to      = toStr ? parseLocalDate(toStr) : null;
+  const origDay = from.getDate();
+  let y = from.getFullYear(), m = from.getMonth(); // m is 0-indexed
+  const results = [];
+  while (results.length < limit) {
+    const maxDay = new Date(y, m + 1, 0).getDate();
+    const cursor = new Date(y, m, Math.min(origDay, maxDay));
+    if (to && cursor > to) break;
+    results.push(isoDateOf(cursor));
+    m++;
+    if (m > 11) { m = 0; y++; }
   }
   return results;
 }
@@ -410,18 +474,28 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
   }
 
   /* ──────────── RECURRING ──────────── */
-  const days    = selectedDays();
-  const fromStr = recurStartEl.value;
-  const toStr   = recurEndEl.value;      // "" = ongoing
+  const pattern  = getRecurPattern();
+  const isCustom = pattern === "CUSTOM";
+  const days     = selectedDays();
+  const fromStr  = recurStartEl.value;
+  const toStr    = recurEndEl.value;      // "" = ongoing
   const start_at = recurStartTimeEl.value;
   const end_at   = recurEndTimeEl.value;
   const ongoing  = !toStr;
 
-  if (!days.length)          return showErr("Select at least one day.");
-  if (!fromStr)              return showErr("Repeat start date is required.");
-  if (!start_at || !end_at)  return showErr("Start and end time are required.");
+  if (isCustom && !days.length)  return showErr("Select at least one day.");
+  if (!fromStr)                   return showErr("Repeat start date is required.");
+  if (!start_at || !end_at)       return showErr("Start and end time are required.");
   const s = dtMs("2000-01-01", start_at), en = dtMs("2000-01-01", end_at);
   if (en <= s) return showErr("End time must be after start time.");
+
+  // Helper: pick the right generator for the chosen pattern
+  function getOccurrences(limit) {
+    if (isCustom) return genOccurrences(days, fromStr, toStr || null, limit);
+    if (pattern === "MONTHLY") return genMonthlyOccurrences(fromStr, toStr || null, limit);
+    const intervalDays = pattern === "WEEKLY" ? 7 : 14;
+    return genIntervalOccurrences(fromStr, toStr || null, intervalDays, limit);
+  }
 
   try {
     submitBtn.disabled = true;
@@ -429,40 +503,42 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
 
     // Save the series template (used by the ticker to auto-generate future occurrences)
     const { error: serErr } = await supabase.from("recurring_series").insert({
-      id:                  seriesId,
-      organization_id:     org.id,
-      created_by_user_id:  createdBy,
+      id:                   seriesId,
+      organization_id:      org.id,
+      created_by_user_id:   createdBy,
       title, description, location,
-      hourly_rate:         hourlyRate,
+      hourly_rate:          hourlyRate,
       start_at, end_at,
-      break_minutes:       hasBreak ? breakMinutes : 0,
-      break_is_paid:       hasBreak ? break_is_paid : true,
+      break_minutes:        hasBreak ? breakMinutes : 0,
+      break_is_paid:        hasBreak ? break_is_paid : true,
       track_time,
-      recur_days:          days,
-      recur_end_date:      toStr || null,
+      recurrence_pattern:   pattern,
+      recur_days:           isCustom ? days : [],
+      recur_end_date:       toStr || null,
       assigned_employee_id: employeeId || null,
-      is_active:           true,
+      is_active:            true,
     });
     if (serErr) throw serErr;
 
     /* ── ONGOING: create only the first occurrence ── */
     if (ongoing) {
       resultEl.innerHTML = `<div class="wl-subtext">Creating first occurrence…</div>`;
-      const firstDates = genOccurrences(days, fromStr, null, 1);
-      if (!firstDates.length) return showErr("No matching start date found for the selected days.");
+      const firstDates = getOccurrences(1);
+      if (!firstDates.length) return showErr("No matching start date found.");
 
       const shift = await createShift({
-        organization_id: org.id, title, description, location,
-        hourly_rate: hourlyRate,
-        shift_date:  firstDates[0],
-        end_date:    firstDates[0],
+        organization_id:    org.id, title, description, location,
+        hourly_rate:        hourlyRate,
+        shift_date:         firstDates[0],
+        end_date:           firstDates[0],
         start_at, end_at,
-        break_minutes: hasBreak ? breakMinutes : 0,
-        break_is_paid: hasBreak ? break_is_paid : true,
+        break_minutes:      hasBreak ? breakMinutes : 0,
+        break_is_paid:      hasBreak ? break_is_paid : true,
         track_time,
-        is_recurring: true,
-        recur_days: days,
-        recur_end_date: null,
+        is_recurring:       true,
+        recurrence_pattern: pattern,
+        recur_days:         isCustom ? days : [],
+        recur_end_date:     null,
         recurring_group_id: seriesId,
       });
       if (employeeId) await assignShiftToEmployee({ shiftId: shift.id, employeeUserId: employeeId });
@@ -470,7 +546,7 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
 
     } else {
       /* ── FIXED END DATE: create all occurrences now ── */
-      const occ = genOccurrences(days, fromStr, toStr, 500);
+      const occ = getOccurrences(500);
       if (!occ.length) return showErr("No occurrences found. Check dates and selected days.");
       if (!confirm(`Create ${occ.length} shift${occ.length===1?"":"s"} (${fromStr} → ${toStr})?`)) {
         submitBtn.disabled = false; return;
@@ -479,15 +555,16 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
       const created = [];
       for (const dateStr of occ) {
         const shift = await createShift({
-          organization_id: org.id, title, description, location,
-          hourly_rate: hourlyRate, shift_date: dateStr, end_date: dateStr,
+          organization_id:    org.id, title, description, location,
+          hourly_rate:        hourlyRate, shift_date: dateStr, end_date: dateStr,
           start_at, end_at,
-          break_minutes: hasBreak ? breakMinutes : 0,
-          break_is_paid: hasBreak ? break_is_paid : true,
+          break_minutes:      hasBreak ? breakMinutes : 0,
+          break_is_paid:      hasBreak ? break_is_paid : true,
           track_time,
-          is_recurring: true,
-          recur_days: days,
-          recur_end_date: toStr,
+          is_recurring:       true,
+          recurrence_pattern: pattern,
+          recur_days:         isCustom ? days : [],
+          recur_end_date:     toStr,
           recurring_group_id: seriesId,
         });
         if (employeeId) await assignShiftToEmployee({ shiftId: shift.id, employeeUserId: employeeId });
@@ -550,6 +627,8 @@ function afterSuccess(shifts, employeeId, mode) {
   recurEndTimeEl.value = "17:00:00";
   breakMinutesEl.disabled = true;
   dayPills.forEach(p => { p.classList.remove("is-selected"); p.querySelector("input").checked = false; });
+  recurPatternEl.value = "CUSTOM";
+  customDayPanelEl.style.display = "block";
   isRecurringEl.checked = false;
   recurringPanel.style.display     = "none";
   singleDatePanel.style.display    = "block";
