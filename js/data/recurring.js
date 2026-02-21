@@ -100,12 +100,15 @@ async function tickOne(supabase, series) {
     .single();
   if (createErr) throw createErr;
 
-  // Auto-assign stored employee if set
+  // Auto-assign stored employee if set.
+  // Use the RPC — it supplies organization_id + assigned_by_user_id (both NOT NULL)
+  // and also auto-creates the timesheet for the employee.
   if (series.assigned_employee_id) {
-    await supabase.from("shift_assignments").upsert(
-      { shift_id: newShift.id, employee_user_id: series.assigned_employee_id },
-      { onConflict: "shift_id,employee_user_id" }
-    );
+    const { error: assignErr } = await supabase.rpc("assign_shift_to_employee", {
+      p_shift_id:         newShift.id,
+      p_employee_user_id: series.assigned_employee_id,
+    });
+    if (assignErr) console.warn(`[recurring] assign failed for shift ${newShift.id}:`, assignErr.message);
   }
   return 1;
 }
