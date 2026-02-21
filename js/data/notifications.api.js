@@ -103,7 +103,7 @@ async function _insert({ userId, orgId = null, type, title, body = null, link = 
   const supabase = getSupabase();
   const { error } = await supabase
     .from("notifications")
-    .insert({ user_id: userId, org_id: orgId, type, title, body, link });
+    .insert({ user_id: userId, organization_id: orgId, type, title, body, link });
   if (error) throw error;
 }
 
