@@ -119,7 +119,7 @@ export async function notifyShiftAssigned({ employeeUserId, orgId, shiftTitle, s
     type:  "SHIFT_ASSIGNED",
     title: "You've been assigned to a shift",
     body:  `${shiftTitle} · ${formatDate(shiftDate)}`,
-    link:  `/app/employee/shifts.html`,
+    link:  `/Worklynx/app/employee/my-shifts.html`,
   });
 }
 
@@ -133,7 +133,7 @@ export async function notifyShiftCancelled({ employeeUserId, orgId, shiftTitle, 
     type:  "SHIFT_CANCELLED",
     title: "Shift cancelled",
     body:  `${shiftTitle} · ${formatDate(shiftDate)} has been cancelled`,
-    link:  null,
+    link:  `/Worklynx/app/employee/my-shifts.html`,
   });
 }
 
@@ -147,7 +147,7 @@ export async function notifyShiftUpdated({ employeeUserId, orgId, shiftTitle, sh
     type:  "SHIFT_UPDATED",
     title: "Shift details have changed",
     body:  `${shiftTitle} · ${formatDate(shiftDate)} was updated`,
-    link:  `/app/employee/shifts.html`,
+    link:  `/Worklynx/app/employee/my-shifts.html`,
   });
 }
 
@@ -161,7 +161,7 @@ export async function notifyTimesheetSubmitted({ managerUserId, orgId, employeeN
     type:  "TIMESHEET_SUBMITTED",
     title: "Timesheet submitted",
     body:  `${employeeName} submitted a timesheet for ${shiftTitle}`,
-    link:  `/app/manager/approvals.html`,
+    link:  `/Worklynx/app/manager/approvals.html`,
   });
 }
 

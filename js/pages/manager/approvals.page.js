@@ -6,11 +6,14 @@ import { renderFooter } from "../../ui/footer.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
+import { getSession } from "../../core/session.js";
+import { listOrgMembers } from "../../data/members.api.js";
 
 await requireRole(["MANAGER", "BM", "BO"]);
 
 const org = await loadOrgContext();
 const supabase = getSupabase();
+const session = await getSession();
 
 document.body.prepend(
   renderHeader({ companyName: org.name, companyLogoUrl: org.company_logo_url })
@@ -62,6 +65,13 @@ content.innerHTML = `
 const listEl = content.querySelector("#approvalsList");
 const filterEl = content.querySelector("#filterStatus");
 
+// Cache member profiles so we can show names instead of UUIDs
+let memberMap = {};
+try {
+  const members = await listOrgMembers({ organizationId: org.id });
+  members.forEach(m => { memberMap[m.user_id] = m.full_name || m.email || m.user_id; });
+} catch (_) { /* non-fatal — fall back to UUID display */ }
+
 async function loadApprovals() {
   const status = filterEl.value;
   listEl.innerHTML = `<div style="padding:20px 0;color:var(--muted);">Loading…</div>`;
@@ -92,7 +102,7 @@ async function loadApprovals() {
     let query = supabase
       .from("timesheets")
       .select(`
-        id, status, submitted_at, created_at,
+        id, status, submitted_at, approved_at, created_at,
         shift_id, employee_user_id,
         shifts ( title, shift_date, start_at, end_at, hourly_rate, location )
       `)
@@ -137,6 +147,7 @@ function renderCard(ts) {
   const earnings = hours * rate;
 
   const isPending = ts.status === "SUBMITTED";
+  const employeeName = memberMap[ts.employee_user_id] || ts.employee_user_id;
 
   const badge = isPending
     ? `<span style="background:#fef3c7;border:1.5px solid #fcd34d;color:#92400e;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">⏳ Pending</span>`
@@ -157,8 +168,9 @@ function renderCard(ts) {
           ${earnings > 0 ? `<span style="font-weight:700;color:var(--fg);">💰 $${earnings.toFixed(2)}</span>` : ""}
         </div>
         <div style="margin-top:6px;font-size:11px;color:var(--muted);">
-          Employee: <code>${escapeHtml(ts.employee_user_id)}</code>
+          👤 ${escapeHtml(employeeName)}
           ${ts.submitted_at ? ` · Submitted ${formatDatetime(ts.submitted_at)}` : ""}
+          ${ts.approved_at ? ` · Approved ${formatDatetime(ts.approved_at)}` : ""}
         </div>
       </div>
       ${isPending ? `
@@ -176,7 +188,11 @@ async function handleApprove(timesheetId, btn) {
   try {
     const { error } = await supabase
       .from("timesheets")
-      .update({ status: "APPROVED" })
+      .update({
+        status: "APPROVED",
+        approved_by_user_id: session.user.id,
+        approved_at: new Date().toISOString(),
+      })
       .eq("id", timesheetId)
       .eq("organization_id", org.id);
 
