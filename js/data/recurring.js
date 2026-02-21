@@ -35,12 +35,11 @@ export async function tickRecurringSeries(orgId) {
 
 async function tickOne(supabase, series) {
   const pattern = series.recurrence_pattern || "CUSTOM";
+  const daySet  = new Set((series.recur_days || []).map(Number));
 
-  // CUSTOM pattern requires at least one recur_day
-  if (pattern === "CUSTOM") {
-    const daySet = new Set((series.recur_days || []).map(Number));
-    if (!daySet.size) return 0;
-  }
+  // All patterns except legacy CUSTOM require at least one selected day
+  if (pattern !== "CUSTOM" && !daySet.size) return 0;
+  if (pattern === "CUSTOM"  && !daySet.size) return 0;
 
   // Find the latest non-cancelled shift in this series
   const { data: latest } = await supabase
@@ -62,14 +61,14 @@ async function tickOne(supabase, series) {
   // Calculate next occurrence date based on pattern
   let nextDate;
   if (pattern === "WEEKLY") {
-    nextDate = addDaysToDateStr(latest.shift_date, 7);
+    // Find next selected weekday after latest (handles multi-day correctly)
+    nextDate = nextOccurrenceAfter(latest.shift_date, daySet);
   } else if (pattern === "FORTNIGHTLY") {
-    nextDate = addDaysToDateStr(latest.shift_date, 14);
+    nextDate = nextFortnightlyOccurrence(latest.shift_date, daySet);
   } else if (pattern === "MONTHLY") {
-    nextDate = addMonthToDateStr(latest.shift_date);
+    nextDate = nextMonthlyWeekdayOccurrence(latest.shift_date, daySet);
   } else {
-    // CUSTOM — find next day-of-week match
-    const daySet = new Set((series.recur_days || []).map(Number));
+    // CUSTOM (legacy) — find next day-of-week match
     nextDate = nextOccurrenceAfter(latest.shift_date, daySet);
   }
 
@@ -124,7 +123,7 @@ async function tickOne(supabase, series) {
   return 1;
 }
 
-// ── Date arithmetic ───────────────────────────────────────────────────────────
+// ── Date arithmetic & occurrence helpers ──────────────────────────────────────
 
 function addDaysToDateStr(dateStr, days) {
   const d = parseLocalDate(dateStr);
@@ -132,16 +131,9 @@ function addDaysToDateStr(dateStr, days) {
   return isoDateOf(d);
 }
 
-function addMonthToDateStr(dateStr) {
-  const [y, m, day] = dateStr.split("-").map(Number);
-  // Clamp to last day of the target month (e.g. Jan 31 + 1 month → Feb 28)
-  const maxDay = new Date(y, m, 0).getDate(); // last day of month m (1-based → 0th of next)
-  const target = new Date(y, m, Math.min(day, maxDay)); // month m is already +1 (0-indexed)
-  return isoDateOf(target);
-}
-
 /**
  * Returns the next date after `afterDateStr` whose ISO week-day is in `daySet`.
+ * Used by WEEKLY and legacy CUSTOM patterns.
  */
 function nextOccurrenceAfter(afterDateStr, daySet) {
   const cursor = parseLocalDate(afterDateStr);
@@ -151,6 +143,64 @@ function nextOccurrenceAfter(afterDateStr, daySet) {
     cursor.setDate(cursor.getDate() + 1);
   }
   return null;
+}
+
+/**
+ * FORTNIGHTLY: from the latest shift, find the next occurrence.
+ * Each selected weekday has its own 14-day cycle.
+ * Within the same week we pick the next later day; otherwise we jump +14
+ * from the earliest selected day's anchor in the current/prev week.
+ */
+function nextFortnightlyOccurrence(latestStr, daySet) {
+  const date = parseLocalDate(latestStr);
+  const dow  = isoWeekDay(date);
+  // Any selected day later in the same week?
+  const laterDays = [...daySet].filter(d => d > dow).sort((a, b) => a - b);
+  if (laterDays.length > 0) {
+    return addDaysToDateStr(latestStr, laterDays[0] - dow);
+  }
+  // All selected days for this week are done — jump to earliest day +14
+  const earliestDay = Math.min(...daySet);
+  const daysBack    = (dow - earliestDay + 7) % 7; // how far back is the anchor
+  const anchorStr   = addDaysToDateStr(latestStr, -daysBack);
+  return addDaysToDateStr(anchorStr, 14);
+}
+
+/**
+ * Returns the Nth occurrence (1-based) of `weekday` (1=Mon…7=Sun) in the given month.
+ * Falls back one week if the Nth occurrence doesn't exist in that month.
+ */
+function getNthWeekdayOfMonth(year, month0, weekday, n) {
+  const firstOfMonth = new Date(year, month0, 1);
+  const daysToFirst  = (weekday - isoWeekDay(firstOfMonth) + 7) % 7;
+  const result       = new Date(year, month0, 1 + daysToFirst + (n - 1) * 7);
+  if (result.getMonth() !== month0) result.setDate(result.getDate() - 7);
+  return result;
+}
+
+/**
+ * MONTHLY: from the latest shift, find the next occurrence.
+ * Derives the week-of-month (N) from the latest shift's date and finds
+ * the Nth occurrence of the next selected weekday in the same or next month.
+ */
+function nextMonthlyWeekdayOccurrence(latestStr, daySet) {
+  const date = parseLocalDate(latestStr);
+  const dow  = isoWeekDay(date);
+  const n    = Math.ceil(date.getDate() / 7); // 1 for days 1-7, 2 for 8-14 …
+  // Any selected day later this same Nth-week slot?
+  const laterDays = [...daySet].filter(d => d > dow).sort((a, b) => a - b);
+  if (laterDays.length > 0) {
+    const candidate = new Date(date);
+    candidate.setDate(candidate.getDate() + (laterDays[0] - dow));
+    // Confirm it's still within the same week-of-month
+    if (Math.ceil(candidate.getDate() / 7) === n) return isoDateOf(candidate);
+  }
+  // Move to next month: find Nth occurrence of earliest selected day
+  let nextM0 = date.getMonth() + 1;
+  let nextY  = date.getFullYear();
+  if (nextM0 > 11) { nextM0 = 0; nextY++; }
+  const earliestDay = Math.min(...daySet);
+  return isoDateOf(getNthWeekdayOfMonth(nextY, nextM0, earliestDay, n));
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
