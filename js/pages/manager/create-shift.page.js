@@ -92,14 +92,13 @@ content.innerHTML = `
           <div style="margin-bottom:16px;">
             <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">How often?</label>
             <select id="recurPattern" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--wl-border);font-size:13px;background:var(--bg);">
-              <option value="CUSTOM">Custom (pick specific days of the week)</option>
               <option value="WEEKLY">Weekly</option>
               <option value="FORTNIGHTLY">Fortnightly (every 2 weeks)</option>
-              <option value="MONTHLY">Monthly (same date each month)</option>
+              <option value="MONTHLY">Monthly (same weekday each month)</option>
             </select>
           </div>
 
-          <!-- Custom day picker – hidden for WEEKLY / FORTNIGHTLY / MONTHLY -->
+          <!-- Day picker – always visible -->
           <div id="customDayPanel">
             <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px;">Repeat on these days</div>
             <div id="dayPicker" style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -239,13 +238,9 @@ dayPills.forEach(pill => {
 function selectedDays() {
   return [...content.querySelectorAll("input[name=recurDay]:checked")].map(cb => Number(cb.value));
 }
-function getRecurPattern() { return recurPatternEl?.value || "CUSTOM"; }
+function getRecurPattern() { return recurPatternEl?.value || "WEEKLY"; }
 
-recurPatternEl.addEventListener("change", () => {
-  const isCustom = getRecurPattern() === "CUSTOM";
-  customDayPanelEl.style.display = isCustom ? "block" : "none";
-  updatePreview(); updateHint();
-});
+recurPatternEl.addEventListener("change", () => { updatePreview(); updateHint(); });
 
 /* ── Toggle recurring ─────────────────────────────────────── */
 isRecurringEl.addEventListener("change", () => {
@@ -294,7 +289,7 @@ function updateHint() {
   const ongoingSuffix = (isRecurringEl.checked && !recurEndEl.value)
     ? " · next shift auto-created 24h before start" : "";
   const label = isRecurringEl.checked ? "Each shift" : "Duration";
-  const patternLabels = { WEEKLY: "Weekly", FORTNIGHTLY: "Fortnightly", MONTHLY: "Monthly", CUSTOM: "Custom" };
+  const patternLabels = { WEEKLY: "Weekly", FORTNIGHTLY: "Fortnightly", MONTHLY: "Monthly" };
   const patternPrefix = isRecurringEl.checked ? `${patternLabels[getRecurPattern()] || "Recurring"} · ` : "";
   hintEl.textContent = `${patternPrefix}${label}: ${Math.floor(m/60)}h ${m%60}m · ${bText} · ${track}${ongoingSuffix}`;
 }
@@ -303,14 +298,13 @@ updateHint();
 /* ── Recurring preview ────────────────────────────────────── */
 function updatePreview() {
   if (!isRecurringEl.checked) { recurPreviewEl.style.display = "none"; return; }
-  const pattern  = getRecurPattern();
-  const isCustom = pattern === "CUSTOM";
-  const days     = selectedDays();
-  const fromStr  = recurStartEl.value;
-  const toStr    = recurEndEl.value;
-  const ongoing  = !toStr;
+  const pattern = getRecurPattern();
+  const days    = selectedDays();
+  const fromStr = recurStartEl.value;
+  const toStr   = recurEndEl.value;
+  const ongoing = !toStr;
 
-  if (isCustom && !days.length) {
+  if (!days.length) {
     dayPickerHintEl.textContent = "Select at least one day.";
     recurPreviewEl.style.display = "none";
     updateOngoingBanner();
@@ -320,23 +314,21 @@ function updatePreview() {
   updateOngoingBanner();
   if (!fromStr) { recurPreviewEl.style.display = "none"; return; }
 
-  // Generate occurrences for the preview
+  const limit = ongoing ? 1 : 500;
+  const toArg = ongoing ? null : toStr;
   let occ;
-  if (isCustom) {
-    occ = genOccurrences(days, fromStr, ongoing ? null : toStr, ongoing ? 1 : 500);
+  if (pattern === "FORTNIGHTLY") {
+    occ = genFortnightlyOccurrences(days, fromStr, toArg, limit);
   } else if (pattern === "MONTHLY") {
-    occ = genMonthlyOccurrences(fromStr, ongoing ? null : toStr, ongoing ? 1 : 500);
+    occ = genMonthlyWeekdayOccurrences(days, fromStr, toArg, limit);
   } else {
-    const intervalDays = pattern === "WEEKLY" ? 7 : 14;
-    occ = genIntervalOccurrences(fromStr, ongoing ? null : toStr, intervalDays, ongoing ? 1 : 500);
+    occ = genWeeklyOccurrences(days, fromStr, toArg, limit);
   }
 
   if (!occ.length) {
     recurPreviewEl.style.display = "block";
     recurPreviewEl.className = "wl-alert wl-alert--error";
-    recurPreviewEl.innerHTML = isCustom
-      ? "No matching date found — try adjusting the start date or selected days."
-      : "No occurrences found — check dates.";
+    recurPreviewEl.innerHTML = "No occurrences found — check dates and selected days.";
     return;
   }
 
@@ -367,11 +359,11 @@ function updatePreview() {
 /* ── Occurrence generators ────────────────────────────────── */
 function isoWeekDay(date) { const d = date.getDay(); return d === 0 ? 7 : d; }
 
-// CUSTOM: iterate day-by-day, pick dates matching the selected weekdays
-function genOccurrences(days, fromStr, toStr, limit) {
-  const daySet  = new Set(days);
-  const from    = parseLocalDate(fromStr);
-  const to      = toStr ? parseLocalDate(toStr) : new Date(from.getTime() + 14 * 86400000);
+// WEEKLY: all selected weekdays, every week
+function genWeeklyOccurrences(days, fromStr, toStr, limit) {
+  const daySet = new Set(days);
+  const from   = parseLocalDate(fromStr);
+  const to     = toStr ? parseLocalDate(toStr) : new Date(from.getTime() + 14 * 86400000);
   const results = [];
   const cursor  = new Date(from);
   while (cursor <= to && results.length < limit) {
@@ -381,34 +373,51 @@ function genOccurrences(days, fromStr, toStr, limit) {
   return results;
 }
 
-// WEEKLY / FORTNIGHTLY: fixed interval in days from fromStr
-function genIntervalOccurrences(fromStr, toStr, intervalDays, limit) {
-  const cursor = parseLocalDate(fromStr);
-  const to     = toStr ? parseLocalDate(toStr) : null;
-  const results = [];
-  while (results.length < limit && (!to || cursor <= to)) {
-    results.push(isoDateOf(cursor));
-    cursor.setDate(cursor.getDate() + intervalDays);
+// FORTNIGHTLY: each selected weekday repeats on its own 14-day cycle
+function genFortnightlyOccurrences(days, fromStr, toStr, limit) {
+  const from = parseLocalDate(fromStr);
+  const to   = toStr ? parseLocalDate(toStr) : null;
+  const allOcc = [];
+  for (const d of days) {
+    // Advance from start date to the first occurrence of this weekday
+    const cursor  = new Date(from);
+    const startDow = isoWeekDay(cursor);
+    cursor.setDate(cursor.getDate() + (d - startDow + 7) % 7);
+    // Repeat every 14 days
+    while (!to || cursor <= to) {
+      allOcc.push(isoDateOf(new Date(cursor)));
+      cursor.setDate(cursor.getDate() + 14);
+      if (allOcc.length >= limit * 3) break; // safety cap
+    }
   }
-  return results;
+  return [...new Set(allOcc)].sort().slice(0, limit);
 }
 
-// MONTHLY: same calendar date each month, clamped to last day of the month
-function genMonthlyOccurrences(fromStr, toStr, limit) {
-  const from    = parseLocalDate(fromStr);
-  const to      = toStr ? parseLocalDate(toStr) : null;
-  const origDay = from.getDate();
-  let y = from.getFullYear(), m = from.getMonth(); // m is 0-indexed
-  const results = [];
-  while (results.length < limit) {
-    const maxDay = new Date(y, m + 1, 0).getDate();
-    const cursor = new Date(y, m, Math.min(origDay, maxDay));
-    if (to && cursor > to) break;
-    results.push(isoDateOf(cursor));
-    m++;
-    if (m > 11) { m = 0; y++; }
+// Returns the Nth occurrence (1-based) of `weekday` (1=Mon…7=Sun) in a given month.
+// Falls back to the last occurrence if N doesn't exist (e.g. 5th Monday).
+function getNthWeekdayOfMonth(year, month0, weekday, n) {
+  const firstOfMonth = new Date(year, month0, 1);
+  const daysToFirst  = (weekday - isoWeekDay(firstOfMonth) + 7) % 7;
+  const result       = new Date(year, month0, 1 + daysToFirst + (n - 1) * 7);
+  if (result.getMonth() !== month0) result.setDate(result.getDate() - 7);
+  return result;
+}
+
+// MONTHLY: Nth weekday of each month, where N = week-of-month from start date
+function genMonthlyWeekdayOccurrences(days, fromStr, toStr, limit) {
+  const from = parseLocalDate(fromStr);
+  const to   = toStr ? parseLocalDate(toStr) : null;
+  const n    = Math.ceil(from.getDate() / 7); // 1 for days 1-7, 2 for 8-14, etc.
+  const allOcc = [];
+  let y = from.getFullYear(), m0 = from.getMonth();
+  for (let i = 0; i < limit + 24 && allOcc.length < limit; i++) {
+    for (const d of days) {
+      const date = getNthWeekdayOfMonth(y, m0, d, n);
+      if (date >= from && (!to || date <= to)) allOcc.push(isoDateOf(date));
+    }
+    if (++m0 > 11) { m0 = 0; y++; }
   }
-  return results;
+  return [...new Set(allOcc)].sort().slice(0, limit);
 }
 
 /* ── Load employees ───────────────────────────────────────── */
@@ -475,7 +484,6 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
 
   /* ──────────── RECURRING ──────────── */
   const pattern  = getRecurPattern();
-  const isCustom = pattern === "CUSTOM";
   const days     = selectedDays();
   const fromStr  = recurStartEl.value;
   const toStr    = recurEndEl.value;      // "" = ongoing
@@ -483,18 +491,18 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
   const end_at   = recurEndTimeEl.value;
   const ongoing  = !toStr;
 
-  if (isCustom && !days.length)  return showErr("Select at least one day.");
-  if (!fromStr)                   return showErr("Repeat start date is required.");
-  if (!start_at || !end_at)       return showErr("Start and end time are required.");
+  if (!days.length)              return showErr("Select at least one day.");
+  if (!fromStr)                  return showErr("Repeat start date is required.");
+  if (!start_at || !end_at)      return showErr("Start and end time are required.");
   const s = dtMs("2000-01-01", start_at), en = dtMs("2000-01-01", end_at);
   if (en <= s) return showErr("End time must be after start time.");
 
   // Helper: pick the right generator for the chosen pattern
   function getOccurrences(limit) {
-    if (isCustom) return genOccurrences(days, fromStr, toStr || null, limit);
-    if (pattern === "MONTHLY") return genMonthlyOccurrences(fromStr, toStr || null, limit);
-    const intervalDays = pattern === "WEEKLY" ? 7 : 14;
-    return genIntervalOccurrences(fromStr, toStr || null, intervalDays, limit);
+    const toArg = toStr || null;
+    if (pattern === "FORTNIGHTLY") return genFortnightlyOccurrences(days, fromStr, toArg, limit);
+    if (pattern === "MONTHLY")     return genMonthlyWeekdayOccurrences(days, fromStr, toArg, limit);
+    return genWeeklyOccurrences(days, fromStr, toArg, limit);
   }
 
   try {
@@ -513,7 +521,7 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
       break_is_paid:        hasBreak ? break_is_paid : true,
       track_time,
       recurrence_pattern:   pattern,
-      recur_days:           isCustom ? days : [],
+      recur_days:           days,
       recur_end_date:       toStr || null,
       assigned_employee_id: employeeId || null,
       is_active:            true,
@@ -537,7 +545,7 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
         track_time,
         is_recurring:       true,
         recurrence_pattern: pattern,
-        recur_days:         isCustom ? days : [],
+        recur_days:         days,
         recur_end_date:     null,
         recurring_group_id: seriesId,
       });
@@ -563,7 +571,7 @@ content.querySelector("#shiftForm").addEventListener("submit", async e => {
           track_time,
           is_recurring:       true,
           recurrence_pattern: pattern,
-          recur_days:         isCustom ? days : [],
+          recur_days:         days,
           recur_end_date:     toStr,
           recurring_group_id: seriesId,
         });
@@ -627,8 +635,7 @@ function afterSuccess(shifts, employeeId, mode) {
   recurEndTimeEl.value = "17:00:00";
   breakMinutesEl.disabled = true;
   dayPills.forEach(p => { p.classList.remove("is-selected"); p.querySelector("input").checked = false; });
-  recurPatternEl.value = "CUSTOM";
-  customDayPanelEl.style.display = "block";
+  recurPatternEl.value = "WEEKLY";
   isRecurringEl.checked = false;
   recurringPanel.style.display     = "none";
   singleDatePanel.style.display    = "block";
