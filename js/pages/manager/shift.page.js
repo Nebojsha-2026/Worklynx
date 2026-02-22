@@ -71,6 +71,7 @@ const today       = isoToday();
 const isPast      = shift.shift_date < today;
 const isCancelled = String(shift.status || "").toUpperCase() === "CANCELLED";
 const canEdit     = !isPast && !isCancelled;
+const isRecurring = !!(shift.is_recurring && shift.recurring_group_id);
 
 // ── Load employees + assignments ───────────────────────────────────────────
 let employees        = [];
@@ -170,21 +171,38 @@ content.innerHTML = `
         </div>
       </div>
 
-      <div class="wl-form__row">
-        <div>
-          <label>Start date</label>
-          <input id="editStartDate" type="date" required value="${escapeHtml(shift.shift_date || "")}" min="${today}" />
+      ${isRecurring ? `
+      <div style="margin-bottom:14px;padding:12px 16px;border-radius:10px;border:1.5px solid var(--brand-border);background:var(--brand-soft);">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;">♻ Recurring shift — apply changes to:</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:6px;">
+          <input type="radio" name="recurScope" value="THIS" checked /> This shift only
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="recurScope" value="FUTURE" /> This shift + all future shifts in the series
+        </label>
+      </div>
+      ` : ""}
+
+      <div id="editDatePanel">
+        <div class="wl-form__row">
+          <div>
+            <label>Start date</label>
+            <input id="editStartDate" type="date" required value="${escapeHtml(shift.shift_date || "")}" min="${today}" />
+          </div>
+          <div>
+            <label>End date</label>
+            <input id="editEndDate" type="date" required value="${escapeHtml(shift.end_date || shift.shift_date || "")}" min="${today}" />
+          </div>
         </div>
-        <div>
-          <label>Start time</label>
-          <select id="editStartTime">${buildTimeOptions(shift.start_at || "")}</select>
-        </div>
+      </div>
+      <div id="editFutureDateNote" class="wl-subtext" style="display:none;margin-bottom:10px;">
+        Each shift keeps its own date — only time, rate, location and description will be updated across the series.
       </div>
 
       <div class="wl-form__row">
         <div>
-          <label>End date</label>
-          <input id="editEndDate" type="date" required value="${escapeHtml(shift.end_date || shift.shift_date || "")}" min="${today}" />
+          <label>Start time</label>
+          <select id="editStartTime">${buildTimeOptions(shift.start_at || "")}</select>
         </div>
         <div>
           <label>End time</label>
@@ -296,6 +314,22 @@ if (editCancelBtn && editSection) {
   });
 }
 
+// ── Recurring scope toggle ─────────────────────────────────────────────────
+const editDatePanel      = document.querySelector("#editDatePanel");
+const editFutureDateNote = document.querySelector("#editFutureDateNote");
+
+document.querySelectorAll('input[name="recurScope"]').forEach(inp => {
+  inp.addEventListener("change", () => {
+    const isFuture = document.querySelector('input[name="recurScope"]:checked')?.value === "FUTURE";
+    if (editDatePanel)       editDatePanel.style.display      = isFuture ? "none" : "";
+    if (editFutureDateNote)  editFutureDateNote.style.display = isFuture ? "" : "none";
+    const sd = document.querySelector("#editStartDate");
+    const ed = document.querySelector("#editEndDate");
+    if (sd) sd.required = !isFuture;
+    if (ed) ed.required = !isFuture;
+  });
+});
+
 // ── Break mode toggle ──────────────────────────────────────────────────────
 const editBreakMode    = document.querySelector("#editBreakMode");
 const editBreakMinutes = document.querySelector("#editBreakMinutes");
@@ -328,18 +362,30 @@ if (editForm) {
     const newEndTime     = document.querySelector("#editEndTime").value;
     const newBreakMode   = document.querySelector("#editBreakMode").value;
     const newBreakMins   = Number(document.querySelector("#editBreakMinutes").value || 0);
+    const recurScope     = isRecurring
+      ? (document.querySelector('input[name="recurScope"]:checked')?.value || "THIS")
+      : "THIS";
+    const isFutureScope  = recurScope === "FUTURE";
 
-    // Validation
+    // ── Validation ────────────────────────────────────────────────────────
     if (!newTitle)                                     return showEditErr("Title is required.");
     if (!Number.isFinite(newRate) || newRate <= 0)     return showEditErr("Hourly rate must be greater than 0.");
-    if (newStartDate < today)                          return showEditErr("Start date cannot be in the past.");
-    if (newEndDate < newStartDate)                     return showEditErr("End date must be on or after start date.");
     if (newBreakMode !== "NONE" && newBreakMins <= 0)  return showEditErr("Break minutes must be greater than 0 when break is enabled.");
 
-    const startMs = new Date(`${newStartDate}T${newStartTime}`).getTime();
-    const endMs   = new Date(`${newEndDate}T${newEndTime}`).getTime();
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-      return showEditErr("End date/time must be after start date/time.");
+    if (!isFutureScope) {
+      // Date validation only when editing this shift's date
+      if (newStartDate < today)                        return showEditErr("Start date cannot be in the past.");
+      if (newEndDate < newStartDate)                   return showEditErr("End date must be on or after start date.");
+      const startMs = new Date(`${newStartDate}T${newStartTime}`).getTime();
+      const endMs   = new Date(`${newEndDate}T${newEndTime}`).getTime();
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+        return showEditErr("End date/time must be after start date/time.");
+      }
+    } else {
+      // For future scope, validate time only (no date change)
+      const startMs = new Date(`2000-01-01T${newStartTime}`).getTime();
+      const endMs   = new Date(`2000-01-01T${newEndTime}`).getTime();
+      if (endMs <= startMs) return showEditErr("End time must be after start time.");
     }
 
     const saveBtn = document.querySelector("#editSaveBtn");
@@ -347,41 +393,99 @@ if (editForm) {
       saveBtn.disabled    = true;
       saveBtn.textContent = "Saving…";
 
-      const patch = {
+      // Fields that always apply (including to future shifts)
+      const commonPatch = {
         title:         newTitle,
         description:   newDescription || null,
         location:      newLocation    || null,
         hourly_rate:   newRate,
         track_time:    newTrackTime,
-        shift_date:    newStartDate,
-        end_date:      newEndDate,
         start_at:      newStartTime,
         end_at:        newEndTime,
         break_minutes: newBreakMode !== "NONE" ? newBreakMins : 0,
         break_is_paid: newBreakMode === "PAID",
       };
 
-      const { data: updated, error: updateErr } = await supabase
-        .from("shifts")
-        .update(patch)
-        .eq("id", shiftId)
-        .select("*")
-        .single();
+      let updated;
 
-      if (updateErr) throw updateErr;
+      if (isFutureScope) {
+        // ── FUTURE SCOPE: bulk-update this + all future non-cancelled shifts ──
+        const { error: bulkErr } = await supabase
+          .from("shifts")
+          .update(commonPatch)
+          .eq("recurring_group_id", shift.recurring_group_id)
+          .gte("shift_date", today)
+          .neq("status", "CANCELLED");
+        if (bulkErr) throw bulkErr;
 
-      // ── Notify assigned employees that the shift was updated ──────────────
-      for (const empId of assignedIds) {
-        notifyShiftUpdated({
-          employeeUserId: empId,
-          orgId:          org.id,
-          shiftTitle:     updated.title,
-          shiftDate:      updated.shift_date,
-          shiftId,
-        }).catch(console.warn);
+        // Update the series template so auto-generated future shifts pick up the changes
+        const { error: serErr } = await supabase
+          .from("recurring_series")
+          .update(commonPatch)
+          .eq("id", shift.recurring_group_id);
+        if (serErr) console.warn("[edit] series template update failed:", serErr.message);
+
+        // Fetch the refreshed single shift for UI update
+        const { data: refreshed } = await supabase
+          .from("shifts").select("*").eq("id", shiftId).single();
+        updated = refreshed;
+
+        // Notify all unique employees assigned to any future shift in this series
+        const { data: futureShifts } = await supabase
+          .from("shifts")
+          .select("id")
+          .eq("recurring_group_id", shift.recurring_group_id)
+          .gte("shift_date", today)
+          .neq("status", "CANCELLED");
+
+        if (futureShifts?.length) {
+          const { data: allAssigns } = await supabase
+            .from("shift_assignments")
+            .select("employee_user_id")
+            .in("shift_id", futureShifts.map(s => s.id));
+
+          const uniqueEmpIds = [...new Set((allAssigns || []).map(a => a.employee_user_id))];
+          for (const empId of uniqueEmpIds) {
+            notifyShiftUpdated({
+              employeeUserId: empId,
+              orgId:          org.id,
+              shiftTitle:     newTitle,
+              shiftDate:      shift.shift_date,
+              shiftId,
+            }).catch(console.warn);
+          }
+        }
+
+      } else {
+        // ── THIS SHIFT ONLY ───────────────────────────────────────────────
+        const singlePatch = {
+          ...commonPatch,
+          shift_date: newStartDate,
+          end_date:   newEndDate,
+        };
+        const { data: saved, error: updateErr } = await supabase
+          .from("shifts")
+          .update(singlePatch)
+          .eq("id", shiftId)
+          .select("*")
+          .single();
+        if (updateErr) throw updateErr;
+        updated = saved;
+
+        // Notify employees assigned to this shift
+        for (const empId of assignedIds) {
+          notifyShiftUpdated({
+            employeeUserId: empId,
+            orgId:          org.id,
+            shiftTitle:     updated.title,
+            shiftDate:      updated.shift_date,
+            shiftId,
+          }).catch(console.warn);
+        }
       }
 
-      // Update detail section display
+      // ── Update detail section display ─────────────────────────────────
+      document.querySelector("#shiftTitleDisplay").textContent = updated?.title || "";
       const detailDate     = document.querySelector("#detailDate");
       const detailTime     = document.querySelector("#detailTime");
       const detailBreak    = document.querySelector("#detailBreak");
@@ -390,17 +494,19 @@ if (editForm) {
       const detailRate     = document.querySelector("#detailRate");
       const detailDesc     = document.querySelector("#detailDescription");
 
-      document.querySelector("#shiftTitleDisplay").textContent = updated.title || "";
-      if (detailDate)     detailDate.textContent     = updated.shift_date || "";
-      if (detailTime)     detailTime.textContent     = `${(updated.start_at || "").slice(0,5)} → ${(updated.end_at || "").slice(0,5)}`;
-      if (detailBreak)    detailBreak.textContent    = updated.break_minutes
+      if (detailDate)     detailDate.textContent     = updated?.shift_date || "";
+      if (detailTime)     detailTime.textContent     = `${(updated?.start_at || "").slice(0,5)} → ${(updated?.end_at || "").slice(0,5)}`;
+      if (detailBreak)    detailBreak.textContent    = updated?.break_minutes
         ? `${updated.break_minutes}min (${updated.break_is_paid ? "paid" : "unpaid"})` : "None";
-      if (detailTracking) detailTracking.textContent = updated.track_time !== false ? "Required" : "Not required";
-      if (detailLocation) detailLocation.textContent = updated.location || "";
-      if (detailRate)     detailRate.textContent     = `$${updated.hourly_rate}`;
-      if (detailDesc)     detailDesc.textContent     = updated.description || "";
+      if (detailTracking) detailTracking.textContent = updated?.track_time !== false ? "Required" : "Not required";
+      if (detailLocation) detailLocation.textContent = updated?.location || "";
+      if (detailRate)     detailRate.textContent     = `$${updated?.hourly_rate}`;
+      if (detailDesc)     detailDesc.textContent     = updated?.description || "";
 
-      editMsg.innerHTML = `<div class="wl-alert wl-alert--success">Shift updated ✅</div>`;
+      const successMsg = isFutureScope
+        ? "Series updated ✅ — changes applied to this and all future shifts"
+        : "Shift updated ✅";
+      editMsg.innerHTML = `<div class="wl-alert wl-alert--success">${successMsg}</div>`;
       if (editToggleBtn) editToggleBtn.textContent = "✏️ Edit shift";
       editSection.style.display = "none";
 
