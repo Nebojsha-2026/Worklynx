@@ -2,7 +2,8 @@
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
 import { renderFooter } from "../../ui/footer.js";
-import { tickRecurringSeries } from "../../data/recurring.js";
+import { tickRecurringSeries }    from "../../data/recurring.js";
+import { tickShiftNotifications } from "../../data/shiftNotifications.js";
 import { renderSidebar } from "../../ui/sidebar.js";
 import { loadOrgContext } from "../../core/orgContext.js";
 import { getSupabase } from "../../core/supabaseClient.js";
@@ -17,6 +18,7 @@ const org = await loadOrgContext();
 const supabase = getSupabase();
 
 tickRecurringSeries(org.id);
+tickShiftNotifications(org.id);
 
 document.body.prepend(
   renderHeader({

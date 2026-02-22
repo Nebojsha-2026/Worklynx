@@ -1,5 +1,6 @@
 // js/pages/employee/my-shifts.page.js - ORGANIZED BY DAY
-import { getSupabase } from "../../core/supabaseClient.js";
+import { getSupabase }            from "../../core/supabaseClient.js";
+import { tickShiftNotifications } from "../../data/shiftNotifications.js";
 import { listMyShiftAssignments } from "../../data/shiftAssignments.api.js";
 import { requireRole } from "../../core/guards.js";
 import { renderHeader } from "../../ui/header.js";
@@ -11,6 +12,7 @@ import { path } from "../../core/config.js";
 await requireRole(["EMPLOYEE"]);
 
 const org = await loadOrgContext();
+tickShiftNotifications(org.id);
 
 document.body.prepend(
   renderHeader({

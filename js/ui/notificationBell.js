@@ -25,12 +25,18 @@ import {
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 const ICONS = {
-  SHIFT_ASSIGNED:      "📋",
-  SHIFT_CANCELLED:     "🚫",
-  SHIFT_UPDATED:       "✏️",
-  TIMESHEET_SUBMITTED: "📤",
-  INVITE_ACCEPTED:     "🤝",
-  DEFAULT:             "🔔",
+  SHIFT_ASSIGNED:        "📋",
+  SHIFT_CANCELLED:       "🚫",
+  SHIFT_UPDATED:         "✏️",
+  TIMESHEET_SUBMITTED:   "📤",
+  INVITE_ACCEPTED:       "🤝",
+  SHIFT_REMINDER:        "⏰",
+  SHIFT_STARTED:         "🟢",
+  SHIFT_CLOCK_IN_MISSED: "⚠️",
+  SHIFT_ENDING_SOON:     "⏳",
+  SHIFT_ENDED:           "✅",
+  CLOCK_OUT_REMINDER:    "⚠️",
+  DEFAULT:               "🔔",
 };
 
 // ─── Module state ─────────────────────────────────────────────────────────────

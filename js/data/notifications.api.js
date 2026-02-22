@@ -99,11 +99,11 @@ export async function clearAllNotifications() {
  * Insert a notification row.
  * Requires INSERT permission (see SQL migration for RLS policy).
  */
-async function _insert({ userId, orgId = null, type, title, body = null, link = null }) {
+async function _insert({ userId, orgId = null, type, title, body = null, link = null, shiftId = null }) {
   const supabase = getSupabase();
   const { error } = await supabase
     .from("notifications")
-    .insert({ user_id: userId, organization_id: orgId, type, title, body, link });
+    .insert({ user_id: userId, organization_id: orgId, type, title, body, link, shift_id: shiftId ?? null });
   if (error) throw error;
 }
 
